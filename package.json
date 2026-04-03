@@ -1,0 +1,17 @@
+{
+  "name": "audit-angel",
+  "version": "1.0.0",
+  "description": "The Audit Angel — standalone investigation tool for Clever Real Estate",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "author": "Drake Shadwell",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "better-sqlite3": "^12.8.0",
+    "express": "^5.2.1"
+  }
+}
