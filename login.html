@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Audit Angel — Sign In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --navy: #16314e;
+  --navy-deep: #09223d;
+  --blue: #0072ce;
+  --blue-light: #3eb2ef;
+  --blue-wash: #e8f4fd;
+  --text: #16314e;
+  --text-secondary: #6b8299;
+  --border: #d0dce8;
+  --bg: #f5f7fa;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.login-card {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  padding: 48px;
+  width: 100%;
+  max-width: 420px;
+}
+.login-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+.login-logo {
+  width: 56px;
+  height: 56px;
+  background: var(--blue-light);
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 900;
+  font-size: 24px;
+  color: white;
+  margin-bottom: 16px;
+}
+.login-header h1 {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--navy-deep);
+  margin-bottom: 4px;
+}
+.login-header p {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.tabs {
+  display: flex;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 24px;
+}
+.tab {
+  flex: 1;
+  padding: 10px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  cursor: pointer;
+  position: relative;
+  font-family: inherit;
+}
+.tab.active {
+  color: var(--blue);
+}
+.tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--blue);
+}
+.form-group {
+  margin-bottom: 16px;
+}
+.form-group label {
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.form-group input {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.form-group input:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(0,114,206,0.1);
+}
+.submit-btn {
+  width: 100%;
+  padding: 12px;
+  background: var(--blue);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
+  margin-top: 8px;
+}
+.submit-btn:hover { background: #005ba1; }
+.submit-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.error-msg {
+  background: #fef2f2;
+  color: #c04040;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  display: none;
+}
+.hidden { display: none; }
+</style>
+</head>
+<body>
+<div class="login-card">
+  <div class="login-header">
+    <div class="login-logo">C</div>
+    <h1>The Audit Angel</h1>
+    <p>Collaborative data investigation</p>
+  </div>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchMode('login')">Sign In</button>
+    <button class="tab" onclick="switchMode('register')">Register</button>
+  </div>
+
+  <div class="error-msg" id="errorMsg"></div>
+
+  <form id="loginForm" onsubmit="handleSubmit(event)">
+    <div class="form-group hidden" id="nameGroup">
+      <label>Display Name</label>
+      <input type="text" id="displayName" placeholder="Your name" autocomplete="name">
+    </div>
+    <div class="form-group">
+      <label>Email</label>
+      <input type="email" id="email" placeholder="you@company.com" required autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="••••••••" required minlength="6" autocomplete="current-password">
+    </div>
+    <button type="submit" class="submit-btn" id="submitBtn">Sign In</button>
+  </form>
+</div>
+
+<script>
+var mode = 'login';
+
+function switchMode(m) {
+  mode = m;
+  document.querySelectorAll('.tab').forEach(function(t, i) {
+    t.classList.toggle('active', (i === 0 && m === 'login') || (i === 1 && m === 'register'));
+  });
+  document.getElementById('nameGroup').classList.toggle('hidden', m === 'login');
+  document.getElementById('submitBtn').textContent = m === 'login' ? 'Sign In' : 'Create Account';
+  document.getElementById('password').autocomplete = m === 'login' ? 'current-password' : 'new-password';
+  document.getElementById('errorMsg').style.display = 'none';
+}
+
+async function handleSubmit(e) {
+  e.preventDefault();
+  var btn = document.getElementById('submitBtn');
+  var errorEl = document.getElementById('errorMsg');
+  errorEl.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = mode === 'login' ? 'Signing in...' : 'Creating account...';
+
+  var body = {
+    email: document.getElementById('email').value,
+    password: document.getElementById('password').value,
+  };
+  if (mode === 'register') {
+    body.displayName = document.getElementById('displayName').value;
+    if (!body.displayName) {
+      errorEl.textContent = 'Display name is required';
+      errorEl.style.display = 'block';
+      btn.disabled = false;
+      btn.textContent = 'Create Account';
+      return;
+    }
+  }
+
+  try {
+    var res = await fetch('/api/auth/' + mode, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify(body),
+    });
+    var data = await res.json();
+    if (data.ok) {
+      window.location.href = '/';
+    } else {
+      errorEl.textContent = data.error || 'Something went wrong';
+      errorEl.style.display = 'block';
+    }
+  } catch (err) {
+    errorEl.textContent = 'Connection failed — is the server running?';
+    errorEl.style.display = 'block';
+  }
+
+  btn.disabled = false;
+  btn.textContent = mode === 'login' ? 'Sign In' : 'Create Account';
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+{
+  "tabs": [
+    { "file": "Board/clever-qbr-dashboard.html", "name": "Clever QBR" },
+    { "file": "Board/cohort-sign-rate-maturity.html", "name": "Cohort Maturity" },
+    { "file": "Board/raw-data.html", "name": "Raw Data" }
+  ],
+  "groups": [
+    {
+      "name": "Offers QBR",
+      "folder": "Offers QBR",
+      "default": "overview.html",
+      "dashboards": [
+        { "file": "Offers QBR/overview.html", "name": "Overview" },
+        { "file": "Offers QBR/deal-stages.html", "name": "Deal Stages" },
+        { "file": "Offers QBR/revenue.html", "name": "Revenue" },
+        { "file": "Offers QBR/revenue-per-lead.html", "name": "Revenue per Lead" }
+      ]
+    },
+    {
+      "name": "Ad Hoc",
+      "folder": "Ad Hoc",
+      "dashboards": [
+        { "file": "Ad Hoc/hc_performance_dashboard.html", "name": "HC Performance" },
+        { "file": "Ad Hoc/agent-reimbursement-program-analysis.html", "name": "Agent Reimbursement" },
+        { "file": "Ad Hoc/offers-time-allocation.html", "name": "Time Allocation" },
+        { "file": "Ad Hoc/cx-company-scorecard-2026-03-13.html", "name": "CX Scorecard" }
+      ]
+    },
+    {
+      "name": "Drafts",
+      "folder": "Drafts",
+      "dashboards": []
+    }
+  ]
+}

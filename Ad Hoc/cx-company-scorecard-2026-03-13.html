@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Drake Shadwell — Company Scorecard Update | March 13, 2026</title>
+<style>
+  :root {
+    --blue: #1a73e8;
+    --blue-light: #e8f0fe;
+    --orange: #f4811f;
+    --orange-light: #fef3e8;
+    --green: #34a853;
+    --green-light: #e6f4ea;
+    --red: #ea4335;
+    --red-light: #fce8e6;
+    --yellow: #f9ab00;
+    --yellow-light: #fef7e0;
+    --gray: #5f6368;
+    --gray-light: #f1f3f4;
+    --bg: #fafbfc;
+    --card-bg: #ffffff;
+    --text: #202124;
+    --text-secondary: #5f6368;
+    --border: #e0e0e0;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    padding: 24px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 28px;
+    padding-bottom: 20px;
+    border-bottom: 3px solid var(--blue);
+  }
+
+  .header-left h1 {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--blue);
+    margin-bottom: 4px;
+  }
+
+  .header-left .subtitle {
+    font-size: 14px;
+    color: var(--text-secondary);
+  }
+
+  .header-right {
+    text-align: right;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .header-right .date {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .period-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 24px;
+    border-bottom: 2px solid var(--border);
+  }
+
+  .period-tab {
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: all 0.2s;
+  }
+
+  .period-tab:hover { color: var(--blue); }
+  .period-tab.active {
+    color: var(--blue);
+    border-bottom-color: var(--blue);
+  }
+
+  .section-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 28px 0 16px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-title .icon { font-size: 20px; }
+
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .kpi-card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+  }
+
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+  }
+
+  .kpi-card.green::before { background: var(--green); }
+  .kpi-card.red::before { background: var(--red); }
+  .kpi-card.yellow::before { background: var(--yellow); }
+  .kpi-card.blue::before { background: var(--blue); }
+
+  .kpi-label {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+  }
+
+  .kpi-value {
+    font-size: 32px;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+
+  .kpi-card.green .kpi-value { color: var(--green); }
+  .kpi-card.red .kpi-value { color: var(--red); }
+  .kpi-card.yellow .kpi-value { color: var(--yellow); }
+  .kpi-card.blue .kpi-value { color: var(--blue); }
+
+  .kpi-target {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+  }
+
+  .kpi-trend {
+    font-size: 13px;
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .kpi-trend.up { color: var(--green); }
+  .kpi-trend.down { color: var(--red); }
+  .kpi-trend.flat { color: var(--yellow); }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-top: 8px;
+  }
+
+  .badge.on-track { background: var(--green-light); color: var(--green); }
+  .badge.at-risk { background: var(--yellow-light); color: #b06d00; }
+  .badge.off-track { background: var(--red-light); color: var(--red); }
+  .badge.done { background: var(--green-light); color: var(--green); }
+  .badge.in-progress { background: var(--blue-light); color: var(--blue); }
+  .badge.upcoming { background: var(--gray-light); color: var(--gray); }
+
+  .card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+
+  .card h3 {
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .card ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .card li {
+    padding: 8px 0;
+    border-bottom: 1px solid var(--gray-light);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .card li:last-child { border-bottom: none; }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  @media (max-width: 768px) {
+    .two-col { grid-template-columns: 1fr; }
+  }
+
+  .jira-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-top: 8px;
+  }
+
+  .jira-table th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    padding: 8px 10px;
+    border-bottom: 2px solid var(--border);
+  }
+
+  .jira-table td {
+    padding: 10px;
+    border-bottom: 1px solid var(--gray-light);
+    vertical-align: top;
+  }
+
+  .jira-table tr:last-child td { border-bottom: none; }
+
+  .jira-table .ticket-id {
+    font-weight: 600;
+    color: var(--blue);
+    white-space: nowrap;
+  }
+
+  .blocker-card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--red);
+    margin-bottom: 12px;
+  }
+
+  .blocker-card.solving { border-left-color: var(--yellow); }
+
+  .blocker-card h4 {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 6px;
+  }
+
+  .blocker-card p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.6;
+  }
+
+  .blocker-card .solve {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--gray-light);
+    font-size: 13px;
+  }
+
+  .blocker-card .solve strong { color: var(--blue); }
+
+  .ask-card {
+    background: var(--blue-light);
+    border-radius: 12px;
+    padding: 16px 20px;
+    border: 1px solid #c2d7f5;
+    margin-bottom: 12px;
+  }
+
+  .ask-card h4 {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--blue);
+    margin-bottom: 4px;
+  }
+
+  .ask-card p {
+    font-size: 13px;
+    color: var(--text);
+    line-height: 1.6;
+  }
+
+  .progress-bar {
+    height: 8px;
+    background: var(--gray-light);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 8px;
+  }
+
+  .progress-fill {
+    height: 100%;
+    border-radius: 4px;
+  }
+
+  .progress-fill.green { background: var(--green); }
+  .progress-fill.yellow { background: var(--yellow); }
+  .progress-fill.red { background: var(--red); }
+
+  .footer {
+    margin-top: 40px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-secondary);
+    text-align: center;
+  }
+
+  a { color: var(--blue); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  .scope-note {
+    background: var(--orange-light);
+    border: 1px solid #f4811f44;
+    border-radius: 8px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--text);
+    margin-bottom: 24px;
+    line-height: 1.6;
+  }
+
+  .scope-note strong { color: var(--orange); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <h1>Drake Shadwell -- Company Scorecard Update</h1>
+    <div class="subtitle">Clever Offers, Investor Outreach, Agent Education &amp; CX Tooling</div>
+  </div>
+  <div class="header-right">
+    <div class="date">Friday, March 13, 2026</div>
+    <div>drake.shadwell@movewithclever.com</div>
+  </div>
+</div>
+
+<div class="scope-note">
+  <strong>Scope:</strong> This scorecard covers my personal workstream -- Clever Offers execution, investor pipeline, agent education, AMP tooling, and CX process improvements. Metrics shown are the ones I own or directly contribute to.
+</div>
+
+<div class="period-tabs">
+  <div class="period-tab active" onclick="showTab('current', this)">This Week (Mar 9-13)</div>
+  <div class="period-tab" onclick="showTab('prior', this)">Prior Week (Mar 2-6)</div>
+  <div class="period-tab" onclick="showTab('upcoming', this)">Next Week (Mar 16-20)</div>
+</div>
+
+<!-- ==================== THIS WEEK ==================== -->
+<div id="tab-current" class="tab-content active">
+
+<div class="section-title"><span class="icon">📊</span> My Metrics -- Where I Stand</div>
+
+<div class="kpi-grid">
+  <div class="kpi-card yellow">
+    <div class="kpi-label">Offers Sign Rate (QTD)</div>
+    <div class="kpi-value">4.35%</div>
+    <div class="kpi-target">Target: 5.27%</div>
+    <div class="kpi-trend down">&#9660; Below target; conversion is the gap despite strong top-of-funnel</div>
+    <span class="badge at-risk">Needs Attention</span>
+  </div>
+
+  <div class="kpi-card blue">
+    <div class="kpi-label">TX Investor Outreach</div>
+    <div class="kpi-value">In Progress</div>
+    <div class="kpi-target">Manually calling top TX investor companies</div>
+    <div class="kpi-trend up">&#9650; Dean Bright onboarded; ~1.5 hrs of calls carrying to Mon</div>
+    <span class="badge in-progress">Active</span>
+  </div>
+
+  <div class="kpi-card yellow">
+    <div class="kpi-label">Agreements (Q1 Contribution)</div>
+    <div class="kpi-value">1,710</div>
+    <div class="kpi-target">Company target: 3,000 | -8% vs plan</div>
+    <div class="progress-bar"><div class="progress-fill yellow" style="width: 57%"></div></div>
+    <div class="kpi-trend flat" style="margin-top:6px">~ My Offers work directly feeds this number</div>
+    <span class="badge at-risk">At Risk</span>
+  </div>
+
+  <div class="kpi-card green">
+    <div class="kpi-label">Jira Tickets Closed (This Sprint)</div>
+    <div class="kpi-value">7</div>
+    <div class="kpi-target">CO-317, CO-316, CO-308, CO-318, CO-199, CO-312, CO-324</div>
+    <div class="kpi-trend up">&#9650; Cleared backlog of slides, analysis, agent education, and HubSpot work</div>
+    <span class="badge on-track">Strong</span>
+  </div>
+</div>
+
+<div class="section-title"><span class="icon">✅</span> What I Got Done This Week</div>
+
+<div class="card">
+  <table class="jira-table">
+    <thead>
+      <tr>
+        <th>Ticket</th>
+        <th>Work Item</th>
+        <th>Status</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="ticket-id">CO-317</td>
+        <td>Houzeo QBR Offers slides</td>
+        <td><span class="badge done">Done</span></td>
+        <td>Completed and delivered for QBR prep</td>
+      </tr>
+      <tr>
+        <td class="ticket-id">CO-316</td>
+        <td>Analysis: Should we wait to send investor until we send agent?</td>
+        <td><span class="badge done">Done</span></td>
+        <td>30-min analysis completed; recommendation delivered</td>
+      </tr>
+      <tr>
+        <td class="ticket-id">CO-308</td>
+        <td>Agent Council enrollment campaign (email)</td>
+        <td><span class="badge done">Done</span></td>
+        <td>Email blast sent to agent network</td>
+      </tr>
+      <tr>
+        <td class="ticket-id">CO-318</td>
+        <td>Agent Council enrollment (manual call/text outreach)</td>
+        <td><span class="badge done">Done</span></td>
+        <td>Personal outreach completed to targeted agents</td>
+      </tr>
+      <tr>
+        <td class="ticket-id">CO-199</td>
+        <td>"Attach a Cash Buyer" property mod</td>
+        <td><span class="badge done">Done</span></td>
+        <td>Shipped -- now allows multiple matches per deal</td>
+      </tr>
+      <tr>
+        <td class="ticket-id">CO-312</td>
+        <td>Bi-Weekly Agent Education: Offers Agent Guide</td>
+        <td><span class="badge done">Done</span></td>
+        <td>Guide published and distributed</td>
+      </tr>
+      <tr>
+        <td class="ticket-id">CO-324</td>
+        <td>HubSpot investor outreach workflow updates</td>
+        <td><span class="badge done">Done</span></td>
+        <td>Provided feedback to Mike P on response-based delays</td>
+      </tr>
+      <tr>
+        <td>Notion</td>
+        <td>Dean Bright onboarding</td>
+        <td><span class="badge done">Done</span></td>
+        <td>New investor contact onboarded and active</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="section-title"><span class="icon">🔄</span> In Progress</div>
+
+<div class="card">
+  <table class="jira-table">
+    <thead>
+      <tr>
+        <th>Ticket</th>
+        <th>Work Item</th>
+        <th>Status</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="ticket-id">CO-325</td>
+        <td>DBN (Deal-by-Name) investor recruitment</td>
+        <td><span class="badge in-progress">In Progress</span></td>
+        <td>Building targeted investor list for DBN recruitment push</td>
+      </tr>
+      <tr>
+        <td class="ticket-id">CO-323</td>
+        <td>Agent education content pipeline</td>
+        <td><span class="badge in-progress">In Progress</span></td>
+        <td>Next round of education materials in development</td>
+      </tr>
+      <tr>
+        <td class="ticket-id">CO-279</td>
+        <td>Pay for Photos rollout</td>
+        <td><span class="badge in-progress">In Progress</span></td>
+        <td>Coordinating rollout across agent network</td>
+      </tr>
+      <tr>
+        <td class="ticket-id">CO-264</td>
+        <td>Meeting analysis framework</td>
+        <td><span class="badge in-progress">In Progress</span></td>
+        <td>Building structured approach to meeting effectiveness</td>
+      </tr>
+      <tr>
+        <td class="ticket-id">CO-328</td>
+        <td>Autohunt setup and configuration</td>
+        <td><span class="badge in-progress">In Progress</span></td>
+        <td>Getting Autohunt tooling configured for Offers workflow</td>
+      </tr>
+      <tr>
+        <td>Notion</td>
+        <td>TX investor company calls (manual outreach)</td>
+        <td><span class="badge in-progress">In Progress</span></td>
+        <td>~1.5 hrs carrying over to Monday; top TX investor companies</td>
+      </tr>
+      <tr>
+        <td>Notion</td>
+        <td>Data requirements write-up for Trent</td>
+        <td><span class="badge in-progress">In Progress</span></td>
+        <td>Investor offer data at scale (offer vs. final sale price) for UGC ads</td>
+      </tr>
+      <tr>
+        <td>Notion</td>
+        <td>AMP feedback doc -- convert to Codex prompt</td>
+        <td><span class="badge in-progress">In Progress</span></td>
+        <td>~30 min task; waiting on Ben's data export with HubSpot links</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="section-title"><span class="icon">🚧</span> My Blockers and Pain Points</div>
+
+<div class="two-col">
+  <div>
+    <div class="blocker-card">
+      <h4>Offers Sign Rate Below Target</h4>
+      <p>Sign rate at 4.35% QTD vs 5.27% target. Top-of-funnel volume is strong (+32% Y/Y meetings, +78% Y/Y closings) but conversion from agreement to signed offer is lagging. This is the metric that matters most for my workstream.</p>
+      <div class="solve"><strong>How I'm solving it:</strong> Leaning into direct investor outreach (TX calls), HubSpot workflow optimization (response-based delays), and agent education to improve the agent side of the equation.</div>
+    </div>
+
+    <div class="blocker-card">
+      <h4>Investor Outreach is Manually Intensive</h4>
+      <p>Calling through top TX investor companies one by one. Effective but time-consuming. ~1.5 hrs of calls still carrying over. No automation layer yet for this part of the funnel.</p>
+      <div class="solve"><strong>How I'm solving it:</strong> Bias to action now, iterate fast, learn what works, then systematize. Ben's guidance. AMP prompt + Codex should eventually help automate follow-ups.</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="blocker-card solving">
+      <h4>Waiting on Data Exports</h4>
+      <p>Two data needs converging: (1) investor offer data at scale for UGC ads (for Trent), and (2) Ben's HubSpot link export for the AMP feedback-to-Codex prompt. Both are dependency waits that block downstream work.</p>
+      <div class="solve"><strong>How I'm solving it:</strong> Writing up clear data requirements so Trent can scope it. Ben's export should land early next week.</div>
+    </div>
+
+    <div class="blocker-card solving">
+      <h4>QuickBuy Timeline Uncertainty</h4>
+      <p>Need to get Griffin Amdur a clear timeline on QuickBuy. Coordination across product and eng needed to give an honest answer.</p>
+      <div class="solve"><strong>How I'm solving it:</strong> Following up with relevant stakeholders to lock in a timeline I can share confidently.</div>
+    </div>
+  </div>
+</div>
+
+<div class="section-title"><span class="icon">🤝</span> Where I Could Use Help from Other Teams</div>
+
+<div class="ask-card">
+  <h4>Data Team (Trent): Investor + Connection Data for AI Sandbox</h4>
+  <p>I'm writing up requirements for investor offer data at scale -- offer vs. final sale price -- which we need for UGC ads. Ben also needs a data export to append HubSpot links to the AMP feedback doc. Two related data asks converging. Would appreciate a time estimate once Trent reviews the requirements.</p>
+</div>
+
+<div class="ask-card">
+  <h4>Product / Eng: QuickBuy Timeline for Griffin Amdur</h4>
+  <p>Griffin Amdur needs a credible timeline on QuickBuy. I don't have enough visibility into the eng roadmap to give him one. Asking for a quick sync or async answer I can relay.</p>
+</div>
+
+<div class="ask-card">
+  <h4>Marketing: UGC Ad Content Using Investor Offer Data</h4>
+  <p>Once the investor offer data pipeline is ready, I want to partner with marketing on UGC ad content that highlights offer-vs-sale-price wins. This is downstream of the data ask above but worth flagging now so we can plan creative.</p>
+</div>
+
+</div><!-- end tab-current -->
+
+<!-- ==================== PRIOR WEEK ==================== -->
+<div id="tab-prior" class="tab-content">
+
+<div class="section-title"><span class="icon">🏆</span> What I Shipped Last Week (Mar 2-6)</div>
+
+<div class="card">
+  <h3>Completed Deliverables</h3>
+  <ul>
+    <li><strong>Houzeo QBR Offers slides</strong> (CO-317) -- Built out the Offers section of the Houzeo QBR deck.</li>
+    <li><strong>Investor timing analysis</strong> (CO-316) -- 30-minute analysis on whether we should wait to send investor until we send agent. Delivered recommendation.</li>
+    <li><strong>Agent Council enrollment campaign</strong> (CO-308, CO-318) -- Launched email blast and followed up with manual call/text outreach to targeted agents.</li>
+    <li><strong>"Attach a Cash Buyer" property mod</strong> (CO-199) -- Shipped the update that allows multiple cash buyer matches per deal. Unblocks deal flow.</li>
+    <li><strong>Bi-Weekly Agent Education: Offers Agent Guide</strong> (CO-312) -- Published and distributed the latest round of agent education content.</li>
+    <li><strong>HubSpot workflow updates</strong> (CO-324) -- Gave Mike P feedback on the investor outreach workflow; implemented response-based delays instead of fixed cadences.</li>
+    <li><strong>Dean Bright onboarded</strong> -- New investor contact brought into the pipeline and active.</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h3>Key Metrics Snapshot (Week of Mar 2-6)</h3>
+  <ul>
+    <li><strong>Offers sign rate:</strong> 4.35% QTD vs 5.27% target -- flagged as a gap I need to close through outreach volume and conversion improvements.</li>
+    <li><strong>Agreements:</strong> Company-wide at -8% vs plan. My Offers work is one of the levers that feeds this number. Every signed offer in March is Q2/Q3 revenue.</li>
+    <li><strong>Top of funnel:</strong> Meetings +32% Y/Y, Closings +78% Y/Y. Volume is not the problem -- conversion is.</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h3>Context from the Week</h3>
+  <ul>
+    <li>Ben's direction: "Bias to action, iterate fast, learn, then plan." Applied that to the TX investor outreach -- started calling rather than building a perfect list first.</li>
+    <li>AMP feedback accumulating. Enough signal to convert the feedback doc into a Codex prompt that can automate parts of the follow-up process.</li>
+    <li>Luke B asked me to start defining Q2 metrics for tracking (due Mar 31). He wants something "simple enough to act as a guiding light, nuanced enough to be an effective goalpost and warning indicator."</li>
+  </ul>
+</div>
+
+</div><!-- end tab-prior -->
+
+<!-- ==================== UPCOMING WEEK ==================== -->
+<div id="tab-upcoming" class="tab-content">
+
+<div class="section-title"><span class="icon">📅</span> My Plan for Next Week (Mar 16-20)</div>
+
+<div class="card">
+  <h3>Priority Deliverables</h3>
+  <ul>
+    <li><strong>Finish TX investor company calls</strong> -- ~1.5 hrs carrying over. Complete the outreach batch and document learnings for the next round.</li>
+    <li><strong>AMP feedback doc to Codex prompt</strong> -- ~30 min once Ben sends the data export with HubSpot links. Goal: automate investor follow-up patterns.</li>
+    <li><strong>Investor + connection data requirements for Trent</strong> -- Finalize the write-up: investor offer data at scale (offer vs. final sale price) for UGC ads. Hand off to Trent for scoping.</li>
+    <li><strong>QuickBuy timeline for Griffin Amdur</strong> -- Get a firm answer from product/eng and relay it.</li>
+    <li><strong>DBN recruitment push</strong> (CO-325) -- Continue building targeted investor list for Deal-by-Name recruitment.</li>
+    <li><strong>Next agent education round</strong> (CO-323) -- Draft and prep materials for the next bi-weekly agent education send.</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h3>On My Radar</h3>
+  <ul>
+    <li><strong>Pay for Photos rollout</strong> (CO-279) -- Continuing coordination. Need to track agent adoption.</li>
+    <li><strong>Autohunt configuration</strong> (CO-328) -- Getting this set up to streamline the Offers workflow.</li>
+    <li><strong>Meeting analysis framework</strong> (CO-264) -- Lower priority this week but want to keep it moving.</li>
+    <li><strong>Q2 metric definition</strong> -- Luke B wants draft by Mar 31. Start scoping next week so I'm not cramming at the end of the month.</li>
+  </ul>
+</div>
+
+<div class="card">
+  <h3>What I'm Watching</h3>
+  <ul>
+    <li><strong>Agreements pace:</strong> 3 weeks left in Q1. Every agreement in March feeds Q2/Q3 revenue. My Offers sign rate has to improve for us to close the -8% gap.</li>
+    <li><strong>AMP tooling:</strong> If the Codex prompt works, it could meaningfully reduce the manual follow-up load on investor outreach.</li>
+    <li><strong>Stagnant deal outreach campaign:</strong> Tim Stobbe launched this -- watching to see if it uncovers agreements that feed my pipeline.</li>
+  </ul>
+</div>
+
+</div><!-- end tab-upcoming -->
+
+<div class="footer">
+  Drake Shadwell -- Company Scorecard Update | March 13, 2026<br>
+  Sources: Slack (#private-cx-leadership, #offers_product), Notion Kanban, Jira (CO Board), Google Calendar<br>
+  drake.shadwell@movewithclever.com
+</div>
+
+<script>
+function showTab(tabName, el) {
+  document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelectorAll('.period-tab').forEach(function(t) { t.classList.remove('active'); });
+  document.getElementById('tab-' + tabName).classList.add('active');
+  el.classList.add('active');
+}
+</script>
+
+</body>
+</html>
