@@ -19,6 +19,9 @@ const auth = require("./auth");
 const app = express();
 const PORT = process.env.PORT || 3456;
 
+// Trust Railway/Heroku/Render proxy so secure cookies work behind HTTPS termination
+app.set("trust proxy", 1);
+
 // ── Middleware ──
 app.use(express.json({ limit: "10mb" }));
 
