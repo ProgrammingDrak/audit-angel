@@ -182,7 +182,7 @@ async function createUser(email, displayName, passwordHash) {
 
 async function getInvestigationsForUser(userId) {
   return queryAll(`
-    SELECT i.*, u.display_name AS owner_name,
+    SELECT i.*, i.created_at AS created, u.display_name AS owner_name,
       (SELECT COUNT(*) FROM pins p WHERE p.investigation_id = i.id AND p.parent_pin_id IS NULL) AS pin_count
     FROM investigations i
     JOIN users u ON u.id = i.owner_id
@@ -194,7 +194,7 @@ async function getInvestigationsForUser(userId) {
 
 async function getInvestigation(id) {
   return queryOne(`
-    SELECT i.*, u.display_name AS owner_name,
+    SELECT i.*, i.created_at AS created, u.display_name AS owner_name,
       (SELECT COUNT(*) FROM pins p WHERE p.investigation_id = i.id AND p.parent_pin_id IS NULL) AS pin_count
     FROM investigations i
     JOIN users u ON u.id = i.owner_id

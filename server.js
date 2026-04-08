@@ -191,6 +191,13 @@ app.get("/api/investigations/:id", async (req, res) => {
     if (!hasAccess) return res.status(403).json({ error: "Access denied" });
     const inv = await db.getInvestigation(req.params.id);
     if (!inv) return res.status(404).json({ error: "Not found" });
+    // Include pins with images for the report modal
+    const pins = await db.getPinsForInvestigation(req.params.id);
+    for (const pin of pins) {
+      pin.images = await db.getImagesForPin(pin.id);
+      if (typeof pin.data === "string") try { pin.data = JSON.parse(pin.data); } catch(e) {}
+    }
+    inv.pins = pins;
     res.json(inv);
   } catch (err) {
     console.error("[api] Get investigation error:", err);
