@@ -65,6 +65,7 @@ async function initDB() {
         data              JSONB NOT NULL DEFAULT '{}',
         filters           JSONB NOT NULL DEFAULT '{}',
         sort_order        REAL NOT NULL DEFAULT 0,
+        in_summary        BOOLEAN NOT NULL DEFAULT FALSE,
         pinned_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
@@ -118,6 +119,12 @@ async function initDB() {
       CREATE INDEX IF NOT EXISTS idx_session_expire ON session(expire);
     `);
     console.log("[db] Schema initialized");
+
+    // Migrations for existing databases
+    await client.query(`
+      ALTER TABLE pins ADD COLUMN IF NOT EXISTS in_summary BOOLEAN NOT NULL DEFAULT FALSE;
+    `).catch(() => {}); // safe to ignore if column already exists
+    console.log("[db] Migrations applied");
   } finally {
     client.release();
   }
@@ -297,7 +304,7 @@ async function createPin(pin) {
 }
 
 async function updatePin(pinId, fields) {
-  const allowed = ["title", "note", "color"];
+  const allowed = ["title", "note", "color", "in_summary"];
   const sets = [];
   const vals = [];
   let idx = 1;

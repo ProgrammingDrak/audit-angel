@@ -190,7 +190,9 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 .inv-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
 .inv-card-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; cursor: pointer; gap: 10px; }
 .inv-card-header:hover { background: #fafbfc; }
-.inv-card-title { font-size: 14px; font-weight: 700; color: var(--navy-deep); flex: 1; }
+.inv-card-title { font-size: 14px; font-weight: 700; color: var(--navy-deep); flex: 1; max-width: fit-content; cursor: text; border-bottom: 1px dashed transparent; transition: border-color 0.15s; }
+.inv-card-title:hover { border-bottom-color: var(--border); }
+.inv-card-title input.inv-title-input { font-size: 14px; font-weight: 700; color: var(--navy-deep); border: 1px solid var(--blue); border-radius: 4px; padding: 1px 6px; font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; outline: none; width: 100%; min-width: 120px; }
 .inv-card-count { font-size: 11px; font-weight: 700; color: var(--text-secondary); background: #eef1f5; padding: 3px 10px; border-radius: 10px; }
 .inv-card-date { font-size: 11px; color: var(--text-secondary); }
 .inv-card-actions { display: flex; gap: 4px; }
@@ -388,6 +390,14 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
 .pin-move-btn:hover { color:var(--blue); }
 
 /* ===== INVESTIGATION COLOR FILTER ===== */
+.inv-modal-tabs { display:flex; gap:0; border-bottom:2px solid var(--border-light); padding:0 24px; }
+.inv-modal-tab { padding:10px 20px; font-size:12px; font-weight:700; color:var(--text-secondary); cursor:pointer; border:none; background:none; border-bottom:2px solid transparent; margin-bottom:-2px; transition:all 0.15s; font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; }
+.inv-modal-tab:hover { color:var(--navy-deep); }
+.inv-modal-tab.active { color:var(--blue); border-bottom-color:var(--blue); }
+.inv-modal-tab .tab-count { font-size:10px; font-weight:600; background:var(--blue-wash); color:var(--blue); padding:1px 6px; border-radius:8px; margin-left:6px; }
+.inv-summary-empty { text-align:center; padding:40px; color:var(--text-secondary); font-size:13px; line-height:1.6; }
+.inv-summary-pin { position:relative; }
+.inv-summary-pin .summary-badge { position:absolute; top:8px; right:8px; font-size:9px; font-weight:700; color:var(--blue); background:var(--blue-wash); padding:2px 8px; border-radius:8px; text-transform:uppercase; letter-spacing:0.5px; }
 .inv-color-filter-bar { display:flex; align-items:center; gap:10px; padding:8px 0; margin-bottom:0; }
 .inv-filter-label { font-size:10px; font-weight:700; color:var(--text-secondary); text-transform:uppercase; letter-spacing:0.5px; }
 .inv-color-filter-bar .pin-color-swatch { width:20px; height:20px; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
@@ -593,12 +603,17 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
             </div>
             <button class="deal-modal-close" onclick="closeInvReport()">&times;</button>
         </div>
+        <div class="inv-modal-tabs">
+            <button class="inv-modal-tab active" id="invTabAllPins" onclick="switchInvTab('allPins')">All Pins <span class="tab-count" id="invTabAllCount">0</span></button>
+            <button class="inv-modal-tab" id="invTabSummary" onclick="switchInvTab('summary')">Summary <span class="tab-count" id="invTabSummaryCount">0</span></button>
+        </div>
+        <div id="invTabAllPinsContent">
         <div style="padding:16px 24px;border-bottom:1px solid var(--border-light);">
             <label style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px;">Summary of Findings</label>
             <textarea id="invReportSummary" style="width:100%;min-height:80px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;font-family:Inter,sans-serif;resize:vertical;line-height:1.6;" placeholder="Describe what you found, what it means, and what action to take..."></textarea>
         </div>
         <div style="padding:8px 24px;border-bottom:1px solid var(--border-light);display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-            <button id="addNoteBtn" class="export-csv-btn" onclick="showAddNoteForm()" style="font-size:11px;padding:4px 12px;background:var(--blue);color:#fff;border:none;">+ Add Note</button>
+            <!-- Note form is now always visible below -->
             <button id="toggleImagesBtn" class="export-csv-btn" onclick="toggleInvImages()" style="font-size:11px;padding:4px 12px;">Hide Images</button>
             <button id="collapseAllBtn" class="export-csv-btn" onclick="collapseAllPins()" style="font-size:11px;padding:4px 12px;">Collapse All</button>
             <button id="expandAllBtn" class="export-csv-btn" onclick="expandAllPins()" style="font-size:11px;padding:4px 12px;">Expand All</button>
@@ -614,7 +629,7 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
             <button id="reportFilterClearBtn" onclick="clearReportColorFilter()" class="inv-filter-clear" style="display:none;">Clear</button>
             <span id="reportFilterStatus" class="inv-filter-status"></span>
         </div>
-        <div id="addNoteFormWrap" style="padding:12px 24px;border-bottom:1px solid var(--border-light);display:none;">
+        <div id="addNoteFormWrap" style="padding:12px 24px;border-bottom:1px solid var(--border-light);">
             <div id="noteDropZone" tabindex="0" style="border:2px dashed var(--border);border-radius:10px;padding:24px;text-align:center;color:var(--text-secondary);font-size:13px;cursor:pointer;transition:border-color 0.15s,background 0.15s;margin-bottom:10px;">
                 Paste an image (Ctrl+V) or drag &amp; drop a file here
             </div>
@@ -626,13 +641,31 @@ body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Robo
             </div>
             <div style="display:flex;gap:8px;">
                 <button onclick="saveManualNote()" style="background:var(--blue);color:#fff;border:none;padding:6px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:Inter,sans-serif;">Save Note</button>
-                <button onclick="hideAddNoteForm()" style="background:var(--blue-wash);color:var(--blue);border:1px solid rgba(0,114,206,0.2);padding:6px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:Inter,sans-serif;">Cancel</button>
+                <button onclick="document.getElementById('noteTextInput').value='';clearNoteImage();_noteSelectedColor=null;renderNoteColorPicker();" style="background:var(--blue-wash);color:var(--blue);border:1px solid rgba(0,114,206,0.2);padding:6px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:Inter,sans-serif;">Clear</button>
             </div>
         </div>
         <div class="deal-modal-body" id="invReportBody" style="max-height:50vh;"></div>
+        </div><!-- close invTabAllPinsContent -->
+        <div id="invTabSummaryContent" style="display:none;">
+            <div style="padding:16px 24px;border-bottom:1px solid var(--border-light);">
+                <label style="font-size:11px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.5px;display:block;margin-bottom:6px;">Summary of Findings</label>
+                <textarea id="invSummaryTabText" style="width:100%;min-height:80px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;font-family:Inter,sans-serif;resize:vertical;line-height:1.6;" placeholder="Describe what you found, what it means, and what action to take..."></textarea>
+            </div>
+            <div class="deal-modal-body" id="invSummaryBody" style="max-height:50vh;"></div>
+        </div>
         <div class="deal-modal-actions" style="flex-wrap:wrap;">
-            <button class="export-csv-btn" onclick="showAddNoteForm();document.getElementById('addNoteFormWrap').scrollIntoView({behavior:'smooth',block:'center'});" style="font-size:11px;padding:4px 12px;background:var(--blue);color:#fff;border:none;">+ Add Note</button>
+            <button class="export-csv-btn" onclick="document.getElementById('addNoteFormWrap').scrollIntoView({behavior:'smooth',block:'center'});document.getElementById('noteTextInput').focus();" style="font-size:11px;padding:4px 12px;background:var(--blue);color:#fff;border:none;">&#8593; Jump to Note</button>
             <button class="export-csv-btn" onclick="exportInvHTML()" style="background:var(--blue);color:#fff;border:none;">Export as HTML Report</button>
+            <span style="position:relative;display:inline-block;">
+                <button class="export-csv-btn" onclick="toggleAIExportPopover(this)" style="background:var(--navy-deep);color:#fff;border:none;">Export AI-Readable</button>
+                <div id="aiExportPopover" style="display:none;position:absolute;bottom:100%;left:0;margin-bottom:8px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px 18px;box-shadow:0 4px 16px rgba(0,0,0,0.12);min-width:240px;z-index:100;">
+                    <div style="font-size:12px;font-weight:700;color:var(--navy-deep);margin-bottom:10px;">AI-Readable Export</div>
+                    <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-secondary);cursor:pointer;margin-bottom:12px;">
+                        <input type="checkbox" id="aiExportThumbnails"> Include compressed thumbnails
+                    </label>
+                    <button onclick="exportInvAI();document.getElementById('aiExportPopover').style.display='none';" style="background:var(--navy-deep);color:#fff;border:none;padding:6px 16px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:Inter,sans-serif;width:100%;">Export .md</button>
+                </div>
+            </span>
             <button class="export-csv-btn" onclick="saveInvSummary()">Save Summary</button>
             <button id="invCompleteToggleBtn" class="export-csv-btn" onclick="toggleInvCompleteFromModal()" style="background:#3eb2ef;color:#fff;border:none;margin-left:auto;">&#10003; Mark Complete</button>
         </div>
@@ -1111,6 +1144,7 @@ var StorageAdapter = (function() {
         flatPins.forEach(function(p) {
             p.images = p._images || [];
             p.children = [];
+            p.inSummary = !!p.in_summary;
             byId[p.id] = p;
         });
         flatPins.forEach(function(p) {
@@ -2691,10 +2725,38 @@ function undoDeleteInvestigation() {
     // No API call needed — we never deleted from server (delete fires after 6s timeout)
 }
 
+function inlineRenameInv(invId, el) {
+    if (el.querySelector('input')) return; // already editing
+    var inv = INVESTIGATIONS.find(function(i) { return i.id === invId; });
+    if (!inv) return;
+    var currentName = inv.name;
+    el.innerHTML = '<input class="inv-title-input" type="text" value="' + currentName.replace(/"/g, '&quot;') + '">';
+    var input = el.querySelector('input');
+    input.focus();
+    input.select();
+    function save() {
+        var newName = input.value.trim();
+        if (newName && newName !== currentName) {
+            inv.name = newName;
+            saveInvestigations();
+            StorageAdapter.api('PATCH', '/investigations/' + invId, { name: newName }).catch(function(err) { console.error('Rename inv failed:', err); });
+        }
+        renderInvestigations();
+    }
+    input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') { e.preventDefault(); save(); }
+        if (e.key === 'Escape') { e.preventDefault(); renderInvestigations(); }
+    });
+    input.addEventListener('blur', save);
+}
+
 function renameInvestigation(id, e) {
     if (e) { e.stopPropagation(); e.preventDefault(); }
     var inv = INVESTIGATIONS.find(function(i) { return i.id === id; });
     if (!inv) return;
+    // Delegate to inline rename if possible
+    var card = document.querySelector('.inv-card[data-inv-id="' + id + '"] .inv-card-title');
+    if (card) { inlineRenameInv(id, card); return; }
     var name = prompt('Rename investigation:', inv.name);
     if (!name) return;
     inv.name = name;
@@ -3452,7 +3514,7 @@ function _renderInvCard(inv, isCompleted) {
     var html = '<div class="inv-card' + completedClass + '" data-inv-id="' + inv.id + '" style="cursor:pointer;" onclick="openInvReport(\'' + inv.id + '\')">'
         + '<div class="inv-card-header">'
         + (isCompleted ? '<span class="inv-complete-badge">&#10003;</span>' : '')
-        + '<div class="inv-card-title">' + inv.name + '</div>'
+        + '<div class="inv-card-title" onclick="event.stopPropagation();inlineRenameInv(\'' + inv.id + '\',this)">' + inv.name + '</div>'
         + '<div class="inv-card-count">' + totalPins + ' pin' + (totalPins !== 1 ? 's' : '') + '</div>'
         + '<div class="inv-card-date">' + (isCompleted ? 'Closed ' + closedDateStr : dateStr) + '</div>'
         + '<div class="inv-card-actions">' + actions + '</div></div>';
@@ -3544,6 +3606,93 @@ function updateInvestigationField(invId, field, value) {
     StorageAdapter.api('PATCH', '/investigations/' + invId, update).catch(function(err) { console.error('Update inv field failed:', err); });
 }
 
+// --- Investigation Modal Tabs ---
+var _currentInvTab = 'allPins';
+
+function switchInvTab(tab) {
+    _currentInvTab = tab;
+    document.getElementById('invTabAllPins').classList.toggle('active', tab === 'allPins');
+    document.getElementById('invTabSummary').classList.toggle('active', tab === 'summary');
+    document.getElementById('invTabAllPinsContent').style.display = tab === 'allPins' ? '' : 'none';
+    document.getElementById('invTabSummaryContent').style.display = tab === 'summary' ? '' : 'none';
+    if (tab === 'summary') renderSummaryTab();
+}
+
+function renderSummaryTab() {
+    var inv = INVESTIGATIONS.find(function(i) { return i.id === _currentReportInvId; });
+    if (!inv) return;
+    // Sync summary text between both textareas
+    var mainSummary = document.getElementById('invReportSummary').value;
+    document.getElementById('invSummaryTabText').value = mainSummary;
+    // Sync back on input
+    document.getElementById('invSummaryTabText').oninput = function() {
+        document.getElementById('invReportSummary').value = this.value;
+    };
+
+    var summaryPins = [];
+    inv.pins.forEach(function(pin) { if (pin.inSummary) summaryPins.push(pin); });
+
+    // Update tab count
+    document.getElementById('invTabSummaryCount').textContent = summaryPins.length;
+
+    if (!summaryPins.length) {
+        document.getElementById('invSummaryBody').innerHTML = '<div class="inv-summary-empty">'
+            + '<div style="font-size:24px;margin-bottom:8px;">&#128203;</div>'
+            + 'No pins in summary yet.<br>Use the <strong>&#9733;</strong> button on any pin to add it to your summary.'
+            + '</div>';
+        return;
+    }
+
+    var html = '';
+    summaryPins.forEach(function(pin) {
+        var colorClass = pin.color ? ' color-' + pin.color : '';
+        var pinType = (pin.type || 'item').toLowerCase();
+        var typeClass = 'type-' + pinType;
+        html += '<div class="inv-report-pin inv-summary-pin' + colorClass + '" style="padding:14px 12px;border-bottom:1px solid var(--border-light);border-radius:4px;margin-bottom:2px;">'
+            + '<span class="summary-badge">Key Finding</span>'
+            + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">'
+            + '<span class="pin-type-badge ' + typeClass + '">' + pinType.toUpperCase() + '</span>'
+            + '<span style="font-size:10px;background:var(--blue-wash);color:var(--blue);padding:2px 8px;border-radius:8px;font-weight:600;">' + (pin.source || '') + '</span>'
+            + '</div>'
+            + '<div style="font-size:14px;font-weight:700;color:var(--navy-deep);margin-bottom:6px;">' + pin.title + '</div>';
+
+        var images = pin.images || [];
+        if (images.length > 0) {
+            html += '<div style="margin-bottom:10px;">';
+            images.forEach(function(img) {
+                html += '<img src="' + img.dataUrl + '" style="max-width:100%;border-radius:8px;border:1px solid var(--border-light);box-shadow:0 2px 8px rgba(0,0,0,0.08);margin-bottom:6px;cursor:pointer;" onclick="window.open(this.src,\'_blank\')">';
+                if (img.caption) html += '<div style="font-size:11px;color:var(--text-secondary);font-style:italic;margin-bottom:4px;">' + img.caption + '</div>';
+            });
+            html += '</div>';
+        }
+        if (pin.note) html += '<div style="font-size:13px;color:var(--navy);margin-bottom:8px;line-height:1.6;padding:8px 12px;background:#f8f9fa;border-radius:6px;border-left:3px solid var(--border);">' + pin.note.replace(/</g, '&lt;').replace(/\n/g, '<br>') + '</div>';
+
+        html += '<div style="text-align:right;"><button onclick="togglePinSummary(\'' + inv.id + '\',\'' + pin.id + '\')" style="background:none;border:1px solid var(--border);color:var(--text-secondary);padding:4px 10px;border-radius:6px;font-size:10px;font-weight:600;cursor:pointer;font-family:Inter,sans-serif;">Remove from Summary</button></div>';
+        html += '</div>';
+    });
+    document.getElementById('invSummaryBody').innerHTML = html;
+}
+
+function togglePinSummary(invId, pinId) {
+    var inv = INVESTIGATIONS.find(function(i) { return i.id === invId; });
+    if (!inv) return;
+    var pin = inv.pins.find(function(p) { return p.id === pinId; });
+    if (!pin) return;
+    pin.inSummary = !pin.inSummary;
+    saveInvestigations();
+    _updateSummaryTabCount(inv);
+    if (_currentInvTab === 'summary') renderSummaryTab();
+    else openInvReport(invId);
+    StorageAdapter.api('PATCH', '/pins/' + pinId, { in_summary: pin.inSummary }).catch(function(err) { console.error('Toggle summary failed:', err); });
+}
+
+function _updateSummaryTabCount(inv) {
+    var count = 0;
+    inv.pins.forEach(function(p) { if (p.inSummary) count++; });
+    document.getElementById('invTabSummaryCount').textContent = count;
+    document.getElementById('invTabAllCount').textContent = getTotalPinCount(inv);
+}
+
 // --- Investigation Report Modal ---
 function openInvReport(invId) {
     var inv = INVESTIGATIONS.find(function(i) { return i.id === invId; });
@@ -3557,6 +3706,15 @@ function openInvReport(invId) {
     document.getElementById('invReportSubtitle').textContent = subtitleText;
     document.getElementById('invReportSummary').value = inv.summary || '';
     _updateReportCompleteBtn(inv);
+    // Reset to All Pins tab and update counts
+    _currentInvTab = 'allPins';
+    switchInvTab('allPins');
+    _updateSummaryTabCount(inv);
+    // Initialize the always-visible note form
+    document.getElementById('noteTextInput').value = '';
+    _noteSelectedColor = null;
+    if (typeof renderNoteColorPicker === 'function') renderNoteColorPicker();
+    if (typeof clearNoteImage === 'function') clearNoteImage();
 
     var html = '', imgCount = 0;
     inv.pins.forEach(function(pin, idx) {
@@ -3579,6 +3737,7 @@ function openInvReport(invId) {
             + '<span style="font-size:10px;color:var(--text-secondary);white-space:nowrap;">' + dateStr + '</span>'
             + '</div>'
             + '<div class="pin-action-bar">'
+            + '<button class="pin-action-btn" onclick="event.stopPropagation();togglePinSummary(\'' + invId + '\',\'' + pin.id + '\')" title="' + (pin.inSummary ? 'Remove from Summary' : 'Add to Summary') + '" style="font-size:15px;color:' + (pin.inSummary ? 'var(--blue)' : 'var(--text-secondary)') + ';">' + (pin.inSummary ? '&#9733;' : '&#9734;') + '</button>'
             + _renderColorPicker(invId, pin.id, pin.color)
             + '<button class="pin-action-btn" onclick="event.stopPropagation();exportSinglePin(\'' + invId + '\',\'' + pin.id + '\')" title="Export as HTML" style="font-size:13px;">&#8681;</button>'
             + '<span class="pin-move-actions"><button class="pin-action-btn" onclick="event.stopPropagation();showPinMoveMenu(\'' + invId + '\',\'' + pin.id + '\',this)" title="Move or copy to another investigation">&#8644;</button></span>'
@@ -3819,6 +3978,11 @@ function saveInvSummary() {
     if (!_currentReportInvId) return;
     var inv = INVESTIGATIONS.find(function(i) { return i.id === _currentReportInvId; });
     if (!inv) return;
+    // Sync summary from whichever tab is active
+    if (_currentInvTab === 'summary') {
+        var sumTabText = document.getElementById('invSummaryTabText').value;
+        document.getElementById('invReportSummary').value = sumTabText;
+    }
     inv.summary = document.getElementById('invReportSummary').value;
     saveInvestigations();
     StorageAdapter.api('PATCH', '/investigations/' + _currentReportInvId, { summary: inv.summary }).catch(function(err) { console.error('Save summary failed:', err); });
@@ -4332,6 +4496,23 @@ function exportInvHTML() {
             + '</div>';
     }
 
+    // Key Findings (summary pins)
+    var summaryExportPins = inv.pins.filter(function(p) { return p.inSummary; });
+    if (summaryExportPins.length) {
+        h += '<div class="summary-section" style="border-left:4px solid var(--blue);">'
+            + '<h3>Key Findings</h3>';
+        summaryExportPins.forEach(function(p) {
+            var pinTypeClass = 't-' + (p.type || 'item').toLowerCase();
+            h += '<div style="padding:10px 0;border-bottom:1px solid var(--border);">'
+                + '<span class="pin-type ' + pinTypeClass + '">' + (p.type || 'item').toUpperCase() + '</span> '
+                + '<span class="pin-src">' + (p.source || '') + '</span> '
+                + '<strong style="font-size:13px;color:var(--navy-deep);">' + p.title + '</strong>';
+            if (p.note) h += '<div style="font-size:12px;color:var(--navy);margin-top:4px;line-height:1.5;">' + p.note.replace(/</g, '&lt;').replace(/\n/g, '<br>') + '</div>';
+            h += '</div>';
+        });
+        h += '</div>';
+    }
+
     // Table of contents
     h += '<div class="toc"><h3>Data Points</h3>';
     inv.pins.forEach(function(p, i) {
@@ -4715,6 +4896,140 @@ function exportInvHTML() {
     a.href = URL.createObjectURL(blob);
     a.download = inv.name.replace(/[^a-zA-Z0-9 ]/g, '').replace(/ +/g, '-').toLowerCase() + '-report.html';
     a.click();
+}
+
+// --- AI Export Popover ---
+function toggleAIExportPopover(btn) {
+    var pop = document.getElementById('aiExportPopover');
+    pop.style.display = pop.style.display === 'none' ? '' : 'none';
+    if (pop.style.display !== 'none') {
+        // Close on outside click
+        setTimeout(function() {
+            document.addEventListener('click', function handler(e) {
+                if (!pop.contains(e.target) && e.target !== btn) {
+                    pop.style.display = 'none';
+                    document.removeEventListener('click', handler);
+                }
+            });
+        }, 0);
+    }
+}
+
+// --- AI-Readable Export (Markdown) ---
+function exportInvAI() {
+    saveInvSummary();
+    var inv = INVESTIGATIONS.find(function(i) { return i.id === _currentReportInvId; });
+    if (!inv) return;
+    var includeThumbs = document.getElementById('aiExportThumbnails').checked;
+
+    var md = '';
+    md += '# ' + inv.name + '\n';
+    md += 'Created: ' + inv.created + ' | Pins: ' + getTotalPinCount(inv) + ' | Status: ' + (inv.completedAt ? 'Closed ' + inv.completedAt : 'Open') + '\n\n';
+
+    if (inv.summary) {
+        md += '## Summary\n' + inv.summary.trim() + '\n\n';
+    }
+
+    // Key Findings (summary pins)
+    var summaryPins = inv.pins.filter(function(p) { return p.inSummary; });
+    if (summaryPins.length) {
+        md += '## Key Findings\n';
+        summaryPins.forEach(function(pin, idx) {
+            md += _formatPinAI(pin, idx + 1, includeThumbs, '###');
+        });
+        md += '\n';
+    }
+
+    // All Data Points
+    md += '## All Data Points\n';
+    inv.pins.forEach(function(pin, idx) {
+        md += _formatPinAI(pin, idx + 1, includeThumbs, '###');
+        if (pin.children && pin.children.length) {
+            pin.children.forEach(function(child, ci) {
+                md += _formatPinAI(child, idx + 1 + '.' + (ci + 1), includeThumbs, '####');
+            });
+        }
+    });
+
+    md += '---\nGenerated: ' + new Date().toISOString() + ' | The Audit Angel\n';
+
+    var blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = inv.name.replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, '-').toLowerCase() + '-ai-export.md';
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function _formatPinAI(pin, num, includeThumbs, headingLevel) {
+    var md = '';
+    var pinType = (pin.type || 'item').toUpperCase();
+    md += headingLevel + ' PIN ' + num + ': [' + pinType + '] ' + pin.title + '\n';
+    if (pin.source) md += '- Source: ' + pin.source + '\n';
+    if (pin.color) md += '- Color: ' + pin.color + '\n';
+    if (pin.pinnedAt) md += '- Date: ' + pin.pinnedAt + '\n';
+    if (pin.inSummary) md += '- Key Finding: yes\n';
+    if (pin.note) md += '- Note: ' + pin.note.replace(/\n/g, ' ') + '\n';
+
+    // Data fields
+    if (pin.data) {
+        var dataEntries = [];
+        for (var k in pin.data) {
+            if (pin.data[k] !== null && pin.data[k] !== undefined && k !== 'deals') {
+                var val = pin.data[k];
+                if (typeof val === 'object') { try { val = JSON.stringify(val); } catch(e) { val = String(val); } }
+                dataEntries.push(k + ': ' + val);
+            }
+        }
+        if (dataEntries.length) md += '- Data: ' + dataEntries.join(', ') + '\n';
+
+        // Deals
+        if (pin.data.deals && pin.data.deals.length) {
+            md += '- Deals (' + pin.data.deals.length + '):\n';
+            pin.data.deals.forEach(function(d) {
+                md += '  - ' + d.id + ' | Created: ' + (d.created || '-') + ' | Signed: ' + (d.signed || '-') + ' | Commission: ' + (d.commission ? '$' + Math.round(d.commission).toLocaleString() : '-') + '\n';
+            });
+        }
+    }
+
+    // Images
+    var images = pin.images || [];
+    if (images.length) {
+        md += '- Images (' + images.length + '):\n';
+        images.forEach(function(img, i) {
+            var parts = ['Image ' + (i + 1)];
+            if (img.caption) parts.push('Caption: ' + img.caption);
+            if (img.link) parts.push('Source: ' + img.link);
+            md += '  - ' + parts.join(' | ') + '\n';
+            if (includeThumbs && img.dataUrl) {
+                md += _compressImageForAI(img.dataUrl);
+            }
+        });
+    }
+    md += '\n';
+    return md;
+}
+
+function _compressImageForAI(dataUrl) {
+    try {
+        var canvas = document.createElement('canvas');
+        var img = new Image();
+        img.src = dataUrl;
+        // If image not loaded yet, skip thumbnail
+        if (!img.naturalWidth) return '';
+        var maxW = 100;
+        var scale = maxW / img.naturalWidth;
+        if (scale >= 1) scale = 0.5; // still compress even if small
+        canvas.width = Math.round(img.naturalWidth * scale);
+        canvas.height = Math.round(img.naturalHeight * scale);
+        var ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        var thumb = canvas.toDataURL('image/jpeg', 0.3);
+        return '    ![thumb](' + thumb + ')\n';
+    } catch(e) {
+        return '';
+    }
 }
 
 function exportSinglePin(invId, pinId) {
