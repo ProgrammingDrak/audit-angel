@@ -728,17 +728,64 @@ app.post("/api/migrate/import", async (req, res) => {
   }
 });
 
-// ── Static File Serving ──
-// Serve the dashboard at root
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "the-audit-angel.html"));
+// ── Export / Import (JSON) ──
+app.get("/api/export/json", requireAuth, async (req, res) => {
+  try {
+    const investigations = await db.getInvestigationsForUser(req.session.userId);
+    const full = [];
+    for (const inv of investigations) {
+      const detail = await db.getInvestigation(inv.id);
+      full.push(detail);
+    }
+    res.json({ investigations: full });
+  } catch (err) {
+    console.error("[api] Export error:", err);
+    res.status(500).json({ error: "Export failed" });
+  }
 });
 
-// Serve manifest and embedded dashboards
-app.use(express.static(__dirname, {
-  index: false, // Don't auto-serve index.html
-  dotfiles: "ignore",
-}));
+app.post("/api/import/json", requireAuth, async (req, res) => {
+  try {
+    const data = req.body;
+    const investigations = data.investigations || data;
+    if (!Array.isArray(investigations)) return res.status(400).json({ error: "Invalid format" });
+    let imported = 0;
+    for (const inv of investigations) {
+      const invId = inv.id || "inv_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+      try {
+        await db.createInvestigation(invId, req.session.userId, inv.name || "Imported");
+        if (inv.summary) await db.updateInvestigation(invId, { summary: inv.summary });
+        const pins = inv.pins || [];
+        for (const pin of pins) {
+          const pinId = pin.id || "pin_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6);
+          await db.createPin({
+            id: pinId, investigation_id: invId, created_by: req.session.userId,
+            type: pin.type || "note", source: pin.source || "", title: pin.title || "",
+            note: pin.note || "", color: pin.color || null,
+            data: pin.data ? JSON.stringify(pin.data) : "{}",
+          });
+          const images = pin.images || [];
+          for (const img of images) {
+            await db.addImage(pinId, img.data_url || img.dataUrl, img.caption || "", img.link || "");
+          }
+        }
+        imported++;
+      } catch (e) { /* skip duplicates */ }
+    }
+    res.json({ ok: true, imported });
+  } catch (err) {
+    console.error("[api] Import error:", err);
+    res.status(500).json({ error: "Import failed" });
+  }
+});
+
+// ── Static File Serving ──
+app.use(express.static(path.join(__dirname, "public")));
+
+// SPA fallback — serve index.html for all non-API routes
+app.get("/{*splat}", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
 // ── Start Server ──
 async function start() {
