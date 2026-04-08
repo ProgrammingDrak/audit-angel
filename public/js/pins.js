@@ -96,9 +96,23 @@ async function onPinDrop(e, targetPinId) {
 // Move/Copy menu
 function showMoveMenu(pinId, btnEl) {
   closeMoveMenu();
+  // Check if pin is already in summary
+  var pin = _currentReportInv && _currentReportInv.pins ? _currentReportInv.pins.find(function(p) { return p.id === pinId; }) : null;
+  var inSummary = pin && pin.in_summary;
+
   var activeInvs = _investigations.filter(function(i) { return !i.completed_at && i.id !== _currentReportId; });
-  var html = '<div class="pin-move-menu" id="moveMenu">'
-    + '<div class="pin-move-menu-header">Move or copy to...</div>';
+  var html = '<div class="pin-move-menu" id="moveMenu">';
+
+  // Add to Summary option at top
+  if (inSummary) {
+    html += '<div class="pin-move-menu-item" onclick="togglePinSummary(\'' + pinId + '\',false)" style="color:var(--blue);font-weight:600;">&#10003; In Summary &mdash; Remove</div>';
+  } else {
+    html += '<div class="pin-move-menu-item" onclick="togglePinSummary(\'' + pinId + '\',true)" style="color:var(--blue);font-weight:600;">&#9734; Add to Summary</div>';
+  }
+
+  // Separator + move/copy header
+  html += '<div style="border-top:1px solid #E5E7EB;margin:4px 0;"></div>';
+  html += '<div class="pin-move-menu-header">Move or copy to...</div>';
   activeInvs.forEach(function(inv) {
     html += '<div class="pin-move-menu-item" onclick="movePin(\'' + pinId + '\',\'' + inv.id + '\')">&#8594; ' + escHtml(inv.name) + '</div>';
     html += '<div class="pin-move-menu-item" onclick="copyPin(\'' + pinId + '\',\'' + inv.id + '\')">&#128203; Copy to ' + escHtml(inv.name) + '</div>';
@@ -127,4 +141,11 @@ async function copyPin(pinId, targetInvId) {
   await API.copyPin(pinId, targetInvId);
   await loadInvestigations();
   showToast('Pin copied');
+}
+
+async function togglePinSummary(pinId, addToSummary) {
+  closeMoveMenu();
+  await API.updatePin(pinId, { in_summary: addToSummary });
+  await refreshReport();
+  showToast(addToSummary ? 'Added to summary' : 'Removed from summary');
 }

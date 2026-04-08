@@ -86,61 +86,75 @@
       </div>
       <button class="modal-close" onclick="closeReport()">&times;</button>
     </div>
-    <div style="padding:16px 24px;border-bottom:1px solid #F3F4F6;">
-      <label class="field-label">Summary of Findings</label>
-      <textarea id="reportSummary" class="text-area" placeholder="Describe what you found, what it means, and what action to take..."></textarea>
+    <!-- Tab bar -->
+    <div class="report-tabs" id="reportTabs">
+      <button class="report-tab active" data-tab="notes" onclick="switchReportTab('notes')">Notes</button>
+      <button class="report-tab" data-tab="summary" onclick="switchReportTab('summary')">Summary</button>
     </div>
-    <div style="padding:8px 24px;border-bottom:1px solid #F3F4F6;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-      <button class="btn-sm btn-primary" onclick="showAddNoteForm()">+ Add Note</button>
-      <button class="btn-sm btn-light" id="toggleImagesBtn" onclick="toggleImages()">Hide Images</button>
-      <button class="btn-sm btn-light" onclick="collapseAllPins()">Collapse All</button>
-      <button class="btn-sm btn-light" onclick="expandAllPins()">Expand All</button>
-      <select id="sortDropdown" class="btn-sm btn-light" onchange="changePinSort(this.value)" style="padding:4px 10px;font-family:Poppins,sans-serif;font-size:12px;font-weight:600;cursor:pointer;appearance:auto;">
-        <option value="newest">Newest first</option>
-        <option value="oldest">Oldest first</option>
-        <option value="custom">Custom order</option>
-      </select>
-      <span style="font-size:10px;color:#6B7280;margin-left:auto;" id="imgCount"></span>
+    <!-- ===== NOTES TAB ===== -->
+    <div id="tabNotes">
+      <div style="padding:8px 24px;border-bottom:1px solid #F3F4F6;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn-sm btn-primary" onclick="showAddNoteForm()">+ Add Note</button>
+        <button class="btn-sm btn-light" id="toggleImagesBtn" onclick="toggleImages()">Hide Images</button>
+        <button class="btn-sm btn-light" onclick="collapseAllPins()">Collapse All</button>
+        <button class="btn-sm btn-light" onclick="expandAllPins()">Expand All</button>
+        <select id="sortDropdown" class="btn-sm btn-light" onchange="changePinSort(this.value)" style="padding:4px 10px;font-family:Poppins,sans-serif;font-size:12px;font-weight:600;cursor:pointer;appearance:auto;">
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="custom">Custom order</option>
+        </select>
+        <span style="font-size:10px;color:#6B7280;margin-left:auto;" id="imgCount"></span>
+      </div>
+      <!-- Color filter bar -->
+      <div class="color-filter-bar" id="reportColorFilter" style="padding:6px 24px;border-bottom:1px solid #F3F4F6;">
+        <span class="filter-label">Filter:</span>
+        <span class="color-swatch sw-red" onclick="toggleColorFilter('red')" title="Red"></span>
+        <span class="color-swatch sw-yellow" onclick="toggleColorFilter('yellow')" title="Yellow"></span>
+        <span class="color-swatch sw-green" onclick="toggleColorFilter('green')" title="Green"></span>
+        <span class="color-swatch sw-blue" onclick="toggleColorFilter('blue')" title="Blue"></span>
+        <span class="color-swatch sw-none" onclick="toggleColorFilter('none')" title="Uncolored"></span>
+        <button id="filterClearBtn" onclick="clearColorFilter()" class="btn-sm btn-light" style="display:none;">Clear</button>
+        <span id="filterStatus" class="filter-status"></span>
+      </div>
+      <!-- Add note form -->
+      <div id="addNoteFormWrap" style="padding:12px 24px;border-bottom:1px solid #F3F4F6;display:none;">
+        <div id="noteDropZone" tabindex="0" class="drop-zone" style="display:none;">
+          Paste an image (Ctrl+V) or drag &amp; drop a file here
+        </div>
+        <div id="noteImageGallery" style="display:none;flex-wrap:wrap;gap:10px;margin-bottom:10px;"></div>
+        <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:10px;">
+          <textarea id="noteTextInput" class="text-area" placeholder="Write a note or paste an image here..." style="min-height:60px;flex:1;margin-bottom:0;"></textarea>
+          <button type="button" class="upload-icon-btn" onclick="toggleDropZone()" title="Upload image">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </button>
+        </div>
+        <div id="noteColorPicker" style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+          <span style="font-size:11px;font-weight:600;color:#6B7280;">Highlight:</span>
+          <span class="color-picker" id="noteColorSwatches"></span>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-sm btn-primary" onclick="saveManualNote()">Save Note</button>
+          <button class="btn-sm btn-light" onclick="hideAddNoteForm()">Cancel</button>
+        </div>
+      </div>
+      <!-- Report body (pins rendered here) -->
+      <div class="modal-body" id="reportBody"></div>
     </div>
-    <!-- Color filter bar -->
-    <div class="color-filter-bar" id="reportColorFilter" style="padding:6px 24px;border-bottom:1px solid #F3F4F6;">
-      <span class="filter-label">Filter:</span>
-      <span class="color-swatch sw-red" onclick="toggleColorFilter('red')" title="Red"></span>
-      <span class="color-swatch sw-yellow" onclick="toggleColorFilter('yellow')" title="Yellow"></span>
-      <span class="color-swatch sw-green" onclick="toggleColorFilter('green')" title="Green"></span>
-      <span class="color-swatch sw-blue" onclick="toggleColorFilter('blue')" title="Blue"></span>
-      <span class="color-swatch sw-none" onclick="toggleColorFilter('none')" title="Uncolored"></span>
-      <button id="filterClearBtn" onclick="clearColorFilter()" class="btn-sm btn-light" style="display:none;">Clear</button>
-      <span id="filterStatus" class="filter-status"></span>
+    <!-- ===== SUMMARY TAB ===== -->
+    <div id="tabSummary" style="display:none;">
+      <div style="padding:16px 24px;border-bottom:1px solid #F3F4F6;">
+        <label class="field-label">Summary of Findings</label>
+        <textarea id="reportSummary" class="text-area" placeholder="Describe what you found, what it means, and what action to take..."></textarea>
+        <div style="margin-top:8px;">
+          <button class="btn-sm btn-primary" onclick="saveReportSummary()">Save Summary</button>
+        </div>
+      </div>
+      <div class="modal-body" id="summaryPinsBody"></div>
     </div>
-    <!-- Add note form -->
-    <div id="addNoteFormWrap" style="padding:12px 24px;border-bottom:1px solid #F3F4F6;display:none;">
-      <div id="noteDropZone" tabindex="0" class="drop-zone" style="display:none;">
-        Paste an image (Ctrl+V) or drag &amp; drop a file here
-      </div>
-      <div id="noteImageGallery" style="display:none;flex-wrap:wrap;gap:10px;margin-bottom:10px;"></div>
-      <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:10px;">
-        <textarea id="noteTextInput" class="text-area" placeholder="Write a note or paste an image here..." style="min-height:60px;flex:1;margin-bottom:0;"></textarea>
-        <button type="button" class="upload-icon-btn" onclick="toggleDropZone()" title="Upload image">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        </button>
-      </div>
-      <div id="noteColorPicker" style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
-        <span style="font-size:11px;font-weight:600;color:#6B7280;">Highlight:</span>
-        <span class="color-picker" id="noteColorSwatches"></span>
-      </div>
-      <div style="display:flex;gap:8px;">
-        <button class="btn-sm btn-primary" onclick="saveManualNote()">Save Note</button>
-        <button class="btn-sm btn-light" onclick="hideAddNoteForm()">Cancel</button>
-      </div>
-    </div>
-    <!-- Report body (pins rendered here) -->
-    <div class="modal-body" id="reportBody"></div>
     <!-- Actions -->
     <div class="modal-actions">
-      <button class="btn-sm btn-primary" onclick="showAddNoteForm()">+ Add Note</button>
+      <button class="btn-sm btn-primary" id="actionAddNote" onclick="showAddNoteForm()">+ Add Note</button>
       <button class="btn-sm btn-primary" onclick="exportInvHTML()">Export as HTML Report</button>
-      <button class="btn-sm btn-light" onclick="saveReportSummary()">Save Summary</button>
       <button class="btn-sm" id="completeToggleBtn" onclick="toggleCompleteFromModal()" style="background:#0075EB;color:#fff;border:none;margin-left:auto;">&#10003; Mark Complete</button>
     </div>
   </div>

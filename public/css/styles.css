@@ -300,6 +300,33 @@ body {
 }
 .color-picker { display: inline-flex; gap: 4px; align-items: center; }
 
+/* ===== REPORT TABS ===== */
+.report-tabs {
+  display: flex; gap: 0; padding: 0 24px; border-bottom: 1px solid var(--border-light);
+  background: var(--surface);
+}
+.report-tab {
+  background: none; border: none; border-bottom: 2px solid transparent;
+  padding: 10px 20px; font-size: 13px; font-weight: 600;
+  color: var(--text-secondary); cursor: pointer;
+  font-family: Poppins, sans-serif; transition: all 0.15s;
+}
+.report-tab:hover { color: var(--dark); background: var(--surface-subtle); }
+.report-tab.active { color: var(--blue); border-bottom-color: var(--blue); }
+
+/* Summary tab pinned items */
+.summary-pin-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 700; color: var(--blue);
+  background: var(--blue-light); padding: 2px 8px; border-radius: 4px;
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+#summaryPinsBody .report-pin { border-left: 3px solid var(--blue); }
+#summaryPinsBody:empty::after {
+  content: 'No pins added to summary yet. Use the "Add to Summary" option on any pin.';
+  display: block; text-align: center; padding: 40px; color: var(--text-muted); font-size: 13px;
+}
+
 /* ===== PIN CARDS IN REPORT ===== */
 .report-pin {
   background: var(--surface-subtle); border: 1px solid var(--border-light);

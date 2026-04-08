@@ -26,13 +26,17 @@ async function openReport(invId) {
   renderReportPins(inv);
   updateColorFilterUI();
 
+  // Default to Notes tab with note form open
+  switchReportTab('notes');
   document.getElementById('reportOverlay').classList.add('active');
   document.body.style.overflow = 'hidden';
+  showAddNoteForm();
 }
 
 function closeReport() {
   // Auto-save summary
-  var summary = document.getElementById('reportSummary').value;
+  var summaryEl = document.getElementById('reportSummary');
+  var summary = summaryEl ? summaryEl.value : '';
   if (_currentReportId && _currentReportInv && summary !== (_currentReportInv.summary || '')) {
     API.updateInvestigation(_currentReportId, { summary: summary });
   }
@@ -52,6 +56,11 @@ async function refreshReport() {
   var dateStr = new Date(inv.created).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   document.getElementById('reportSubtitle').textContent = inv.pins.length + ' pins -- Created ' + dateStr;
   updateCompleteBtn(inv);
+  // If Summary tab is visible, re-render it
+  var summaryTab = document.getElementById('tabSummary');
+  if (summaryTab && summaryTab.style.display !== 'none') {
+    renderSummaryPins();
+  }
 }
 
 function renderReportPins(inv) {
@@ -282,6 +291,98 @@ function initPinDragHandlers() {
 
 function humanizeKey(key) {
   return key.replace(/_/g, ' ').replace(/([A-Z])/g, ' $1').replace(/^\w/, function(c) { return c.toUpperCase(); });
+}
+
+// Tab switching
+function switchReportTab(tab) {
+  var notesTab = document.getElementById('tabNotes');
+  var summaryTab = document.getElementById('tabSummary');
+  var addNoteBtn = document.getElementById('actionAddNote');
+
+  // Update tab buttons
+  document.querySelectorAll('.report-tab').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
+  });
+
+  if (tab === 'notes') {
+    notesTab.style.display = '';
+    summaryTab.style.display = 'none';
+    if (addNoteBtn) addNoteBtn.style.display = '';
+  } else {
+    notesTab.style.display = 'none';
+    summaryTab.style.display = '';
+    if (addNoteBtn) addNoteBtn.style.display = 'none';
+    hideAddNoteForm();
+    renderSummaryPins();
+  }
+}
+
+function renderSummaryPins() {
+  var body = document.getElementById('summaryPinsBody');
+  if (!_currentReportInv || !_currentReportInv.pins) {
+    body.innerHTML = '';
+    return;
+  }
+
+  var summaryPins = _currentReportInv.pins.filter(function(p) { return p.in_summary; });
+  if (summaryPins.length === 0) {
+    body.innerHTML = '';
+    return;
+  }
+
+  var html = '<div style="padding:8px 24px 4px;"><span style="font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:0.04em;">Pinned to Summary (' + summaryPins.length + ')</span></div>';
+  summaryPins.forEach(function(pin, idx) {
+    html += renderSummaryPin(pin);
+  });
+  body.innerHTML = html;
+}
+
+function renderSummaryPin(pin) {
+  var colorClass = pin.color ? ' color-' + pin.color : '';
+  var timeStr = pin.pinned_at ? new Date(pin.pinned_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
+
+  var html = '<div class="report-pin' + colorClass + '" data-color="' + (pin.color || '') + '">';
+
+  // Header
+  html += '<div class="pin-header" onclick="togglePin(\'' + pin.id + '-sum\')" style="cursor:pointer;">';
+  html += '<span class="pin-expand">&#9654;</span>';
+  html += '<span class="summary-pin-badge">In Summary</span>';
+  html += '<span class="pin-title">' + escHtml(pin.title || 'Untitled') + '</span>';
+  html += '<span class="pin-time">' + timeStr + '</span>';
+  html += '<div class="pin-action-bar" onclick="event.stopPropagation()">';
+  html += '<button class="btn-sm btn-light" style="font-size:11px;padding:3px 10px;" onclick="togglePinSummary(\'' + pin.id + '\',false)">Remove from Summary</button>';
+  html += '</div>';
+  html += '</div>';
+
+  // Details
+  html += '<div class="pin-details">';
+  if (pin.images && pin.images.length > 0) {
+    html += '<div class="pin-image-gallery">';
+    pin.images.forEach(function(img) {
+      html += '<div class="pin-image-wrap">';
+      html += '<img src="' + img.data_url + '" alt="' + escHtml(img.caption || '') + '" onclick="window.open(this.src)">';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+  if (pin.note) {
+    html += '<div class="pin-note">' + escHtml(pin.note) + '</div>';
+  }
+  var data = pin.data || {};
+  var keys = Object.keys(data);
+  if (keys.length > 0) {
+    html += '<table class="pin-data-table">';
+    keys.forEach(function(k) {
+      var val = data[k];
+      if (val === null || val === undefined || val === '') return;
+      if (typeof val === 'object') val = JSON.stringify(val);
+      html += '<tr><td>' + humanizeKey(k) + '</td><td>' + escHtml(String(val)) + '</td></tr>';
+    });
+    html += '</table>';
+  }
+  html += '</div>';
+  html += '</div>';
+  return html;
 }
 
 // Pin sort mode
