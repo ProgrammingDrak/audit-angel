@@ -77,14 +77,17 @@
 </main>
 
 <!-- Report modal -->
-<div class="modal-overlay" id="reportOverlay" onclick="if(event.target===this)closeReport()">
+<div class="modal-overlay" id="reportOverlay">
   <div class="modal" style="max-width:900px;">
     <div class="modal-header">
       <div>
         <div class="modal-title" id="reportTitle"></div>
         <div class="modal-subtitle" id="reportSubtitle"></div>
       </div>
-      <button class="modal-close" onclick="closeReport()">&times;</button>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <button class="btn-sm btn-light" onclick="copyInvestigationLink()" title="Copy link to this investigation">&#128279; Share</button>
+        <button class="modal-close" onclick="closeReport()">&times;</button>
+      </div>
     </div>
     <!-- Tab bar -->
     <div class="report-tabs" id="reportTabs">
@@ -105,14 +108,10 @@
         </select>
         <span style="font-size:10px;color:#6B7280;margin-left:auto;" id="imgCount"></span>
       </div>
-      <!-- Color filter bar -->
+      <!-- Color filter bar (dynamic — includes custom colors) -->
       <div class="color-filter-bar" id="reportColorFilter" style="padding:6px 24px;border-bottom:1px solid #F3F4F6;">
         <span class="filter-label">Filter:</span>
-        <span class="color-swatch sw-red" onclick="toggleColorFilter('red')" title="Red"></span>
-        <span class="color-swatch sw-yellow" onclick="toggleColorFilter('yellow')" title="Yellow"></span>
-        <span class="color-swatch sw-green" onclick="toggleColorFilter('green')" title="Green"></span>
-        <span class="color-swatch sw-blue" onclick="toggleColorFilter('blue')" title="Blue"></span>
-        <span class="color-swatch sw-none" onclick="toggleColorFilter('none')" title="Uncolored"></span>
+        <span id="filterSwatches"></span>
         <button id="filterClearBtn" onclick="clearColorFilter()" class="btn-sm btn-light" style="display:none;">Clear</button>
         <span id="filterStatus" class="filter-status"></span>
       </div>
@@ -122,8 +121,9 @@
           Paste an image (Ctrl+V) or drag &amp; drop a file here
         </div>
         <div id="noteImageGallery" style="display:none;flex-wrap:wrap;gap:10px;margin-bottom:10px;"></div>
+        <div id="noteToolbar"></div>
         <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:10px;">
-          <textarea id="noteTextInput" class="text-area" placeholder="Write a note or paste an image here..." style="min-height:60px;flex:1;margin-bottom:0;"></textarea>
+          <textarea id="noteTextInput" class="text-area" placeholder="Write a note or paste an image here... (supports **bold**, *italic*, [links](url))" style="min-height:60px;flex:1;margin-bottom:0;"></textarea>
           <button type="button" class="upload-icon-btn" onclick="toggleDropZone()" title="Upload image">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
           </button>
@@ -154,7 +154,30 @@
     <!-- Actions -->
     <div class="modal-actions">
       <button class="btn-sm btn-primary" id="actionAddNote" onclick="showAddNoteForm()">+ Add Note</button>
-      <button class="btn-sm btn-primary" onclick="exportInvHTML()">Export as HTML Report</button>
+      <span style="position:relative;display:inline-block;">
+        <button class="btn-sm btn-primary" onclick="toggleExportDropdown()">&#8681; Export</button>
+        <div id="exportDropdown" style="display:none;position:absolute;bottom:100%;left:0;margin-bottom:8px;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-lg);min-width:280px;z-index:100;overflow:hidden;">
+          <div style="padding:10px 16px;cursor:pointer;transition:background 0.1s;" onmouseover="this.style.background='var(--blue-light)'" onmouseout="this.style.background=''" onclick="exportInvHTML();closeExportDropdown();">
+            <div style="font-size:12px;font-weight:700;color:var(--dark);">&#128196; HTML Report</div>
+            <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">Full formatted report with styles and images</div>
+          </div>
+          <div style="padding:10px 16px;border-top:1px solid var(--border-light);">
+            <div style="font-size:12px;font-weight:700;color:var(--dark);margin-bottom:8px;">&#129302; AI-Readable (.md)</div>
+            <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">Minimal tokens, maximum information</div>
+            <div style="font-size:11px;font-weight:600;color:var(--text-secondary);margin-bottom:6px;">Image handling:</div>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-secondary);cursor:pointer;margin-bottom:4px;">
+              <input type="radio" name="aiExportImages" value="none" checked style="margin:0;"> No images (smallest)
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-secondary);cursor:pointer;margin-bottom:4px;">
+              <input type="radio" name="aiExportImages" value="compressed" style="margin:0;"> Low-res thumbnails
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-secondary);cursor:pointer;margin-bottom:8px;">
+              <input type="radio" name="aiExportImages" value="full" style="margin:0;"> Full images as-is
+            </label>
+            <button class="btn-sm btn-primary" onclick="exportInvAI();closeExportDropdown();" style="width:100%;">Export .md</button>
+          </div>
+        </div>
+      </span>
       <button class="btn-sm" id="completeToggleBtn" onclick="toggleCompleteFromModal()" style="background:#0075EB;color:#fff;border:none;margin-left:auto;">&#10003; Mark Complete</button>
     </div>
   </div>
@@ -164,6 +187,8 @@
 <div id="toastContainer"></div>
 
 <script src="/js/api.js"></script>
+<script src="/js/markdown.js"></script>
+<script src="/js/colors.js"></script>
 <script src="/js/investigations.js"></script>
 <script src="/js/pins.js"></script>
 <script src="/js/report.js"></script>

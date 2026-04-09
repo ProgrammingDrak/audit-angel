@@ -48,8 +48,23 @@ function closeAllMenus() {
 
 // Init
 document.addEventListener('DOMContentLoaded', function() {
-  loadInvestigations();
+  loadInvestigations().then(function() {
+    // Load custom colors from preferences
+    loadCustomColors().then(function() {
+      // Check for deep link to specific investigation
+      checkInvestigationHash();
+    });
+  });
   initCaptureHandlers();
+
+  // Safe modal close: only close if mousedown AND mouseup both on overlay
+  var overlay = document.getElementById('reportOverlay');
+  if (overlay) {
+    overlay.addEventListener('mousedown', function(e) { overlay._mouseDownTarget = e.target; });
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay && overlay._mouseDownTarget === overlay) closeReport();
+    });
+  }
 
   // Keyboard shortcuts
   document.addEventListener('keydown', function(e) {
@@ -65,14 +80,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (!e.data || e.data.type !== 'audit-angel-pin') return;
     var pin = e.data.pin;
     if (!pin) return;
-    // If there are active investigations, add to the most recent one
-    // Otherwise create a new investigation and add to it
     (async function() {
       var invs = await API.getInvestigations();
       var active = invs.filter(function(i) { return !i.completed_at; });
       var targetInv;
       if (active.length > 0) {
-        targetInv = active[0]; // most recent active
+        targetInv = active[0];
       } else {
         targetInv = await API.createInvestigation('New Investigation');
       }

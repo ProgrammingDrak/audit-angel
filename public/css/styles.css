@@ -411,7 +411,21 @@ body {
 .pin-data-table td:first-child { font-weight: 600; color: var(--text-secondary); white-space: nowrap; width: 140px; }
 
 /* Pin note text */
-.pin-note { font-size: 13px; color: var(--text-body); line-height: 1.6; margin: 8px 0; white-space: pre-wrap; }
+.pin-note { font-size: 13px; color: var(--text-body); line-height: 1.6; margin: 8px 0; }
+
+/* Pin note display (read-only with edit-on-click) */
+.pin-note-display {
+  font-size: 12px; color: var(--text-body); line-height: 1.5;
+  padding: 6px 10px; margin: 8px 0; background: var(--surface-subtle);
+  border-radius: 6px; border-left: 3px solid var(--border);
+  cursor: pointer; min-height: 36px; position: relative; word-break: break-word;
+}
+.pin-note-display:hover { background: var(--border-light); }
+.pin-note-display:hover .pin-note-edit-hint { opacity: 1 !important; }
+.pin-note-display.pin-note-empty {
+  border: 1px dashed var(--border); border-left: 1px dashed var(--border);
+  font-style: italic; color: var(--text-muted); background: none;
+}
 
 /* Pin children */
 .pin-children { margin-left: 24px; border-left: 2px solid var(--border-light); padding-left: 12px; margin-top: 8px; }

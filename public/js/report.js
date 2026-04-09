@@ -31,6 +31,9 @@ async function openReport(invId) {
   document.getElementById('reportOverlay').classList.add('active');
   document.body.style.overflow = 'hidden';
   showAddNoteForm();
+
+  // Update URL hash for deep linking
+  history.replaceState(null, '', window.location.pathname + window.location.search + '#investigation=' + invId);
 }
 
 function closeReport() {
@@ -46,6 +49,28 @@ function closeReport() {
   document.body.style.overflow = '';
   hideAddNoteForm();
   loadInvestigations();
+  // Clear hash
+  if (window.location.hash.indexOf('investigation=') !== -1) {
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+}
+
+// --- Investigation Deep Links ---
+function copyInvestigationLink() {
+  if (!_currentReportId) return;
+  var url = window.location.origin + window.location.pathname + '#investigation=' + _currentReportId;
+  navigator.clipboard.writeText(url).then(function() {
+    showToast('Link copied to clipboard');
+  });
+}
+
+function checkInvestigationHash() {
+  var hash = window.location.hash;
+  if (!hash) return;
+  var match = hash.match(/investigation=([^&]+)/);
+  if (!match) return;
+  var invId = match[1];
+  setTimeout(function() { openReport(invId); }, 200);
 }
 
 async function refreshReport() {
@@ -56,7 +81,6 @@ async function refreshReport() {
   var dateStr = new Date(inv.created).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   document.getElementById('reportSubtitle').textContent = inv.pins.length + ' pins -- Created ' + dateStr;
   updateCompleteBtn(inv);
-  // If Summary tab is visible, re-render it
   var summaryTab = document.getElementById('tabSummary');
   if (summaryTab && summaryTab.style.display !== 'none') {
     renderSummaryPins();
@@ -70,7 +94,6 @@ function renderReportPins(inv) {
     return;
   }
 
-  // Sort top-level pins based on active sort mode
   var sortMode = inv.pin_sort || 'newest';
   var sortedPins = inv.pins.slice();
   if (sortMode === 'newest') {
@@ -78,7 +101,6 @@ function renderReportPins(inv) {
   } else if (sortMode === 'oldest') {
     sortedPins.sort(function(a, b) { return new Date(a.pinned_at) - new Date(b.pinned_at); });
   }
-  // 'custom' uses existing sort_order (array order from server)
 
   var totalImages = 0;
   var html = '';
@@ -97,11 +119,19 @@ function renderReportPins(inv) {
 }
 
 function renderSinglePin(pin, idx, invId) {
-  var colorClass = pin.color ? ' color-' + pin.color : '';
+  // Support custom colors via inline style
+  var isDefaultColor = ['red','yellow','green','blue'].indexOf(pin.color) !== -1;
+  var colorClass = isDefaultColor ? ' color-' + pin.color : '';
+  var customStyle = '';
+  if (pin.color && !isDefaultColor) {
+    var hex = getColorHex(pin.color);
+    if (hex) customStyle = 'border-left:4px solid ' + hex + ';background:linear-gradient(90deg, ' + hex + '0a 0%, transparent 40%);';
+  }
   var typeClass = ' type-' + (pin.type || 'note');
   var timeStr = pin.pinned_at ? new Date(pin.pinned_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
 
   var html = '<div class="report-pin' + colorClass + '" id="pin-' + pin.id + '" data-color="' + (pin.color || '') + '" '
+    + 'style="' + customStyle + '" '
     + 'draggable="true" ondragstart="onPinDragStart(event,\'' + pin.id + '\')" ondragend="onPinDragEnd(event)" '
     + 'ondragover="onPinDragOver(event,\'' + pin.id + '\')" ondragleave="onPinDragLeave(event)" ondrop="onPinDrop(event,\'' + pin.id + '\')">';
 
@@ -117,15 +147,16 @@ function renderSinglePin(pin, idx, invId) {
   // Action buttons
   html += '<div class="pin-action-bar" onclick="event.stopPropagation()">';
   html += renderColorPicker(pin.id, pin.color);
+  html += '<button class="pin-action-btn" onclick="copyPinToClipboard(\'' + pin.id + '\')" title="Copy to clipboard">&#128203;</button>';
   html += '<button class="pin-action-btn" onclick="showMoveMenu(\'' + pin.id + '\',this)" title="Move/Copy">&#8596;</button>';
   html += '<button class="pin-action-btn danger" onclick="removePinFromReport(\'' + pin.id + '\')" title="Remove">&#128465;</button>';
   html += '</div>';
   html += '</div>';
 
-  // Details (expanded by default)
+  // Details
   html += '<div class="pin-details">';
 
-  // Images — responsive thumbnails with hover-reveal metadata
+  // Images
   if (pin.images && pin.images.length > 0 && !_imagesHidden) {
     html += '<div class="pin-image-gallery">';
     pin.images.forEach(function(img) {
@@ -142,11 +173,16 @@ function renderSinglePin(pin, idx, invId) {
     html += '</div>';
   }
 
-  // Note
+  // Note (read-only with edit-on-click)
   if (pin.note) {
-    html += '<div class="pin-note">' + escHtml(pin.note) + '</div>';
+    html += '<div class="pin-note-display" data-pin="' + pin.id + '" onclick="enterPinNoteEdit(this)">'
+      + '<span class="pin-note-edit-hint" style="position:absolute;top:6px;right:8px;font-size:11px;color:var(--text-muted);opacity:0;transition:opacity 0.15s;">&#9998; Edit</span>'
+      + renderMarkdown(pin.note)
+      + '</div>';
+  } else {
+    html += '<div class="pin-note-display pin-note-empty" data-pin="' + pin.id + '" onclick="enterPinNoteEdit(this)">Click to add a note...</div>';
   }
-  html += '<textarea class="text-area" style="min-height:36px;margin:8px 0;font-size:12px;" placeholder="Add a note..." onblur="updatePinNote(\'' + pin.id + '\',this.value)">' + escHtml(pin.note || '') + '</textarea>';
+  html += '<textarea class="text-area pin-note-editor" data-pin="' + pin.id + '" style="display:none;min-height:36px;margin:8px 0;font-size:12px;border-color:var(--blue);box-shadow:0 0 0 3px rgba(0,117,235,0.08);" placeholder="Add a note...">' + escHtml(pin.note || '') + '</textarea>';
 
   // Data fields
   var data = pin.data || {};
@@ -176,17 +212,88 @@ function renderSinglePin(pin, idx, invId) {
   return html;
 }
 
+// --- Pin Note Edit-in-Place ---
+function enterPinNoteEdit(displayEl) {
+  var pinId = displayEl.getAttribute('data-pin');
+  var editor = displayEl.nextElementSibling;
+  if (!editor || !editor.classList.contains('pin-note-editor')) return;
+  displayEl.style.display = 'none';
+  editor.style.display = '';
+  editor.focus();
+  editor.selectionStart = editor.selectionEnd = editor.value.length;
+  setupSmartLinkPaste(editor);
+  editor.onblur = function() {
+    var newNote = editor.value;
+    updatePinNote(pinId, newNote);
+    if (newNote) {
+      displayEl.className = 'pin-note-display';
+      displayEl.innerHTML = '<span class="pin-note-edit-hint" style="position:absolute;top:6px;right:8px;font-size:11px;color:var(--text-muted);opacity:0;transition:opacity 0.15s;">&#9998; Edit</span>'
+        + renderMarkdown(newNote);
+    } else {
+      displayEl.className = 'pin-note-display pin-note-empty';
+      displayEl.innerHTML = 'Click to add a note...';
+    }
+    editor.style.display = 'none';
+    displayEl.style.display = '';
+  };
+}
+
+// --- Color Picker (per-pin) ---
 function renderColorPicker(pinId, currentColor) {
-  var colors = ['red', 'yellow', 'green', 'blue'];
+  var colors = getAllPinColors();
   var html = '<span class="color-picker" onclick="event.stopPropagation()">';
   colors.forEach(function(c) {
-    var active = currentColor === c ? ' active' : '';
-    html += '<span class="color-swatch sw-' + c + active + '" style="width:14px;height:14px;" onclick="setPinColor(\'' + pinId + '\',\'' + c + '\')" title="' + c + '"></span>';
+    var active = currentColor === c.value ? ' active' : '';
+    var cls = !c.custom ? ' sw-' + c.value : '';
+    var style = c.custom ? ' style="background:' + c.hex + ';width:14px;height:14px;"' : ' style="width:14px;height:14px;"';
+    html += '<span class="color-swatch' + cls + active + '"' + style + ' onclick="setPinColor(\'' + pinId + '\',\'' + c.value + '\')" title="' + c.label + '"></span>';
   });
   var noneActive = !currentColor ? ' active' : '';
   html += '<span class="color-swatch sw-none' + noneActive + '" style="width:14px;height:14px;" onclick="setPinColor(\'' + pinId + '\',null)" title="None"></span>';
+  html += '<span class="color-swatch" style="width:14px;height:14px;background:none;border:1px dashed var(--border);font-size:9px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-muted);" onclick="event.stopPropagation();showAddColorPopover(this,function(){refreshReport();})" title="Add custom color">+</span>';
   html += '</span>';
   return html;
+}
+
+// --- Copy Pin to Clipboard ---
+function copyPinToClipboard(pinId) {
+  if (!_currentReportInv) return;
+  var pin = _currentReportInv.pins.find(function(p) { return p.id === pinId; });
+  if (!pin) return;
+
+  var plainText = (pin.title || '') + '\n';
+  if (pin.note) plainText += '\n' + pin.note;
+  var data = pin.data || {};
+  var dataLines = [];
+  Object.keys(data).forEach(function(k) {
+    if (data[k] !== null && data[k] !== undefined) dataLines.push(k + ': ' + data[k]);
+  });
+  if (dataLines.length) plainText += '\n\n' + dataLines.join('\n');
+
+  var images = pin.images || [];
+  if (images.length > 0) {
+    var htmlContent = '<div style="font-family:Poppins,sans-serif;">'
+      + '<strong>' + escHtml(pin.title || '') + '</strong><br>';
+    if (pin.note) htmlContent += '<div>' + renderMarkdown(pin.note) + '</div>';
+    images.forEach(function(img) {
+      htmlContent += '<img src="' + img.data_url + '" style="max-width:600px;border-radius:8px;margin:8px 0;">';
+      if (img.caption) htmlContent += '<div style="font-size:11px;color:#6B7280;font-style:italic;">' + escHtml(img.caption) + '</div>';
+    });
+    htmlContent += '</div>';
+    try {
+      navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([htmlContent], { type: 'text/html' }),
+          'text/plain': new Blob([plainText], { type: 'text/plain' })
+        })
+      ]).then(function() { showToast('Copied to clipboard (with images)'); })
+        .catch(function() { navigator.clipboard.writeText(plainText).then(function() { showToast('Copied to clipboard'); }); });
+    } catch(e) {
+      navigator.clipboard.writeText(plainText).then(function() { showToast('Copied to clipboard'); });
+    }
+  } else {
+    navigator.clipboard.writeText(plainText).then(function() { showToast('Copied to clipboard'); });
+  }
 }
 
 function togglePin(pinId) {
@@ -227,6 +334,8 @@ function clearColorFilter() {
 function applyColorFilter() {
   if (_colorFilters.length === 0) {
     document.querySelectorAll('.report-pin').forEach(function(el) { el.style.display = ''; });
+    var status = document.getElementById('filterStatus');
+    if (status) status.textContent = '';
     return;
   }
   var shown = 0, total = 0;
@@ -245,15 +354,23 @@ function applyColorFilter() {
 }
 
 function updateColorFilterUI() {
-  document.querySelectorAll('#reportColorFilter .color-swatch').forEach(function(sw) {
-    var c = sw.title.toLowerCase();
-    if (c === 'uncolored') c = 'none';
-    sw.classList.toggle('active', _colorFilters.indexOf(c) !== -1);
-  });
+  // Dynamically render filter swatches including custom colors
+  var container = document.getElementById('filterSwatches');
+  if (container) {
+    var colors = getAllPinColors();
+    var html = '';
+    colors.forEach(function(c) {
+      var active = _colorFilters.indexOf(c.value) !== -1 ? ' active' : '';
+      var cls = !c.custom ? ' sw-' + c.value : '';
+      var style = c.custom ? ' style="background:' + c.hex + ';"' : '';
+      html += '<span class="color-swatch' + cls + active + '"' + style + ' onclick="toggleColorFilter(\'' + c.value + '\')" title="' + c.label + '"></span>';
+    });
+    var noneActive = _colorFilters.indexOf('none') !== -1 ? ' active' : '';
+    html += '<span class="color-swatch sw-none' + noneActive + '" onclick="toggleColorFilter(\'none\')" title="Uncolored"></span>';
+    container.innerHTML = html;
+  }
   var clearBtn = document.getElementById('filterClearBtn');
   if (clearBtn) clearBtn.style.display = _colorFilters.length > 0 ? '' : 'none';
-  var status = document.getElementById('filterStatus');
-  if (status && _colorFilters.length === 0) status.textContent = '';
 }
 
 function updateCompleteBtn(inv) {
@@ -299,7 +416,6 @@ function switchReportTab(tab) {
   var summaryTab = document.getElementById('tabSummary');
   var addNoteBtn = document.getElementById('actionAddNote');
 
-  // Update tab buttons
   document.querySelectorAll('.report-tab').forEach(function(btn) {
     btn.classList.toggle('active', btn.dataset.tab === tab);
   });
@@ -331,7 +447,7 @@ function renderSummaryPins() {
   }
 
   var html = '<div style="padding:8px 24px 4px;"><span style="font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:0.04em;">Pinned to Summary (' + summaryPins.length + ')</span></div>';
-  summaryPins.forEach(function(pin, idx) {
+  summaryPins.forEach(function(pin) {
     html += renderSummaryPin(pin);
   });
   body.innerHTML = html;
@@ -342,8 +458,6 @@ function renderSummaryPin(pin) {
   var timeStr = pin.pinned_at ? new Date(pin.pinned_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '';
 
   var html = '<div class="report-pin' + colorClass + '" data-color="' + (pin.color || '') + '">';
-
-  // Header
   html += '<div class="pin-header" onclick="togglePin(\'' + pin.id + '-sum\')" style="cursor:pointer;">';
   html += '<span class="pin-expand">&#9654;</span>';
   html += '<span class="summary-pin-badge">In Summary</span>';
@@ -354,7 +468,6 @@ function renderSummaryPin(pin) {
   html += '</div>';
   html += '</div>';
 
-  // Details
   html += '<div class="pin-details">';
   if (pin.images && pin.images.length > 0) {
     html += '<div class="pin-image-gallery">';
@@ -366,7 +479,7 @@ function renderSummaryPin(pin) {
     html += '</div>';
   }
   if (pin.note) {
-    html += '<div class="pin-note">' + escHtml(pin.note) + '</div>';
+    html += '<div class="pin-note">' + renderMarkdown(pin.note) + '</div>';
   }
   var data = pin.data || {};
   var keys = Object.keys(data);
@@ -392,4 +505,24 @@ async function changePinSort(mode) {
   await API.updateInvestigation(_currentReportId, { pin_sort: mode });
   _currentReportInv.pin_sort = mode;
   renderReportPins(_currentReportInv);
+}
+
+// Export dropdown toggle
+function toggleExportDropdown() {
+  var dd = document.getElementById('exportDropdown');
+  dd.style.display = dd.style.display === 'none' ? '' : 'none';
+  if (dd.style.display !== 'none') {
+    setTimeout(function() {
+      document.addEventListener('click', function handler(e) {
+        if (!dd.contains(e.target) && !e.target.closest('[onclick*="toggleExportDropdown"]')) {
+          dd.style.display = 'none';
+          document.removeEventListener('click', handler);
+        }
+      });
+    }, 0);
+  }
+}
+function closeExportDropdown() {
+  var dd = document.getElementById('exportDropdown');
+  if (dd) dd.style.display = 'none';
 }

@@ -64,6 +64,7 @@ function exportInvHTML() {
   if (pins.length > 1) {
     html += '<div class="toc">';
     var colorMap = { red: '#DC2626', yellow: '#D97706', green: '#00B373', blue: '#0075EB' };
+    _customPinColors.forEach(function(c) { colorMap[c.id] = c.hex; });
     pins.forEach(function(pin, idx) {
       var dotColor = pin.color && colorMap[pin.color] ? colorMap[pin.color] : '#E5E7EB';
       html += '<div class="toc-item"><span class="toc-num">' + (idx + 1) + '</span>'
@@ -107,8 +108,8 @@ function renderExportPin(pin) {
     });
   }
 
-  // Note
-  if (pin.note) html += '<div class="pin-note">' + escHtml(pin.note) + '</div>';
+  // Note (with markdown)
+  if (pin.note) html += '<div class="pin-note">' + renderMarkdown(pin.note) + '</div>';
 
   // Data
   var data = pin.data || {};
@@ -183,6 +184,103 @@ async function handleJSONImport(input) {
   };
   reader.readAsText(input.files[0]);
   input.value = '';
+}
+
+// --- AI-Readable Export (Markdown) ---
+function exportInvAI() {
+  if (!_currentReportInv) return;
+  var inv = _currentReportInv;
+  var imageMode = 'none';
+  document.querySelectorAll('input[name="aiExportImages"]').forEach(function(r) { if (r.checked) imageMode = r.value; });
+
+  var md = '# ' + (inv.name || 'Investigation') + '\n';
+  md += 'Created: ' + (inv.created || '') + ' | Pins: ' + (inv.pins || []).length + ' | Status: ' + (inv.completed_at ? 'Closed ' + inv.completed_at : 'Open') + '\n\n';
+
+  if (inv.summary) md += '## Summary\n' + inv.summary.trim() + '\n\n';
+
+  var summaryPins = (inv.pins || []).filter(function(p) { return p.in_summary; });
+  if (summaryPins.length) {
+    md += '## Key Findings\n';
+    summaryPins.forEach(function(pin, idx) {
+      md += _formatPinAI(pin, idx + 1, imageMode, '###');
+    });
+    md += '\n';
+  }
+
+  md += '## All Data Points\n';
+  (inv.pins || []).forEach(function(pin, idx) {
+    md += _formatPinAI(pin, idx + 1, imageMode, '###');
+    if (pin.children && pin.children.length) {
+      pin.children.forEach(function(child, ci) {
+        md += _formatPinAI(child, (idx + 1) + '.' + (ci + 1), imageMode, '####');
+      });
+    }
+  });
+
+  md += '---\nGenerated: ' + new Date().toISOString() + ' | The Audit Angel\n';
+
+  var blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (inv.name || 'investigation').replace(/[^a-zA-Z0-9 _-]/g, '').replace(/\s+/g, '-').toLowerCase() + '-ai-export.md';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function _formatPinAI(pin, num, imageMode, headingLevel) {
+  var md = '';
+  md += headingLevel + ' PIN ' + num + ': [' + (pin.type || 'note').toUpperCase() + '] ' + (pin.title || '') + '\n';
+  if (pin.source) md += '- Source: ' + pin.source + '\n';
+  if (pin.color) md += '- Color: ' + getColorLabel(pin.color) + '\n';
+  if (pin.pinned_at) md += '- Date: ' + pin.pinned_at + '\n';
+  if (pin.in_summary) md += '- Key Finding: yes\n';
+  if (pin.note) md += '- Note: ' + pin.note.replace(/\n/g, ' ') + '\n';
+
+  var data = pin.data || {};
+  var entries = [];
+  Object.keys(data).forEach(function(k) {
+    if (data[k] !== null && data[k] !== undefined) {
+      var val = data[k];
+      if (typeof val === 'object') { try { val = JSON.stringify(val); } catch(e) { val = String(val); } }
+      entries.push(k + ': ' + val);
+    }
+  });
+  if (entries.length) md += '- Data: ' + entries.join(', ') + '\n';
+
+  var images = pin.images || [];
+  if (images.length) {
+    md += '- Images (' + images.length + '):\n';
+    images.forEach(function(img, i) {
+      var parts = ['Image ' + (i + 1)];
+      if (img.caption) parts.push('Caption: ' + img.caption);
+      if (img.link) parts.push('Source: ' + img.link);
+      md += '  - ' + parts.join(' | ') + '\n';
+      if (imageMode === 'full' && img.data_url) {
+        md += '  - ![Image ' + (i + 1) + '](' + img.data_url + ')\n';
+      } else if (imageMode === 'compressed' && img.data_url) {
+        md += _compressImageForAI(img.data_url);
+      }
+    });
+  }
+  md += '\n';
+  return md;
+}
+
+function _compressImageForAI(dataUrl) {
+  // For AI export, create a tiny thumbnail reference
+  try {
+    var canvas = document.createElement('canvas');
+    var img = new Image();
+    img.src = dataUrl;
+    canvas.width = 120;
+    canvas.height = Math.round(120 * (img.height / img.width)) || 80;
+    var ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    var thumb = canvas.toDataURL('image/jpeg', 0.3);
+    return '  - ![thumb](' + thumb + ')\n';
+  } catch(e) {
+    return '';
+  }
 }
 
 async function importFromLocalStorage() {

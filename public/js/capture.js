@@ -14,7 +14,12 @@ function showAddNoteForm() {
   document.getElementById('noteImageGallery').innerHTML = '';
   document.getElementById('noteImageGallery').style.display = 'none';
   renderNoteColorSwatches();
-  document.getElementById('noteTextInput').focus();
+  // Markdown toolbar + smart paste
+  var toolbar = document.getElementById('noteToolbar');
+  if (toolbar) toolbar.innerHTML = renderMarkdownToolbar('noteTextInput');
+  var ta = document.getElementById('noteTextInput');
+  if (ta) setupSmartLinkPaste(ta);
+  ta.focus();
 }
 
 function toggleDropZone() {
@@ -48,7 +53,14 @@ async function saveManualNote() {
   };
 
   await API.addPin(_currentReportId, pin);
-  hideAddNoteForm();
+  // Clear form for next note instead of hiding
+  document.getElementById('noteTextInput').value = '';
+  _noteImages = [];
+  _noteColor = null;
+  document.getElementById('noteImageGallery').innerHTML = '';
+  document.getElementById('noteImageGallery').style.display = 'none';
+  document.getElementById('noteDropZone').style.display = 'none';
+  renderNoteColorSwatches();
   await refreshReport();
   await loadInvestigations();
   showToast('Note added');
@@ -56,14 +68,18 @@ async function saveManualNote() {
 
 function renderNoteColorSwatches() {
   var container = document.getElementById('noteColorSwatches');
-  var colors = ['red', 'yellow', 'green', 'blue'];
+  if (!container) return;
+  var colors = getAllPinColors();
   var html = '';
   colors.forEach(function(c) {
-    var active = _noteColor === c ? ' active' : '';
-    html += '<span class="color-swatch sw-' + c + active + '" onclick="setNoteColor(\'' + c + '\')" title="' + c + '"></span>';
+    var active = _noteColor === c.value ? ' active' : '';
+    var cls = !c.custom ? ' sw-' + c.value : '';
+    var style = c.custom ? ' style="background:' + c.hex + ';"' : '';
+    html += '<span class="color-swatch' + cls + active + '"' + style + ' onclick="setNoteColor(\'' + c.value + '\')" title="' + c.label + '"></span>';
   });
   var noneActive = !_noteColor ? ' active' : '';
   html += '<span class="color-swatch sw-none' + noneActive + '" onclick="setNoteColor(null)" title="None"></span>';
+  html += '<span class="color-swatch" style="background:none;border:1px dashed var(--border);font-size:9px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-muted);cursor:pointer;" onclick="showAddColorPopover(this,function(){renderNoteColorSwatches();})" title="Add custom color">+</span>';
   container.innerHTML = html;
 }
 
@@ -98,7 +114,6 @@ function initCaptureHandlers() {
     input.click();
   });
 
-  // Auto-show drop zone when dragging files over the note form area
   var formWrap = document.getElementById('addNoteFormWrap');
   formWrap.addEventListener('dragover', function(e) {
     e.preventDefault();
@@ -106,7 +121,6 @@ function initCaptureHandlers() {
     if (dz.style.display === 'none') dz.style.display = '';
   });
 
-  // Paste anywhere in the note form
   formWrap.addEventListener('paste', function(e) {
     var items = e.clipboardData.items;
     for (var i = 0; i < items.length; i++) {
