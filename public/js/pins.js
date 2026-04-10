@@ -93,15 +93,26 @@ async function onPinDrop(e, targetPinId) {
   });
 }
 
-// Move/Copy menu
+// Move/Copy menu state
+var _moveMenuMode = 'move';       // 'move' | 'copy'
+var _moveMenuSearch = '';
+var _moveMenuShowArchived = false;
+var _moveMenuPinId = null;
+
 function showMoveMenu(pinId, btnEl) {
   closeMoveMenu();
+
+  // Reset menu state on each open
+  _moveMenuMode = 'move';
+  _moveMenuSearch = '';
+  _moveMenuShowArchived = false;
+  _moveMenuPinId = pinId;
+
   // Check if pin is already in summary
   var pin = _currentReportInv && _currentReportInv.pins ? _currentReportInv.pins.find(function(p) { return p.id === pinId; }) : null;
   var inSummary = pin && pin.in_summary;
 
-  var activeInvs = _investigations.filter(function(i) { return !i.completed_at && i.id !== _currentReportId; });
-  var html = '<div class="pin-move-menu" id="moveMenu">';
+  var html = '<div class="pin-move-menu" id="moveMenu" onclick="event.stopPropagation()">';
 
   // Add to Summary option at top
   if (inSummary) {
@@ -110,21 +121,118 @@ function showMoveMenu(pinId, btnEl) {
     html += '<div class="pin-move-menu-item" onclick="togglePinSummary(\'' + pinId + '\',true)" style="color:var(--blue);font-weight:600;">&#9734; Add to Summary</div>';
   }
 
-  // Separator + move/copy header
   html += '<div style="border-top:1px solid #E5E7EB;margin:4px 0;"></div>';
-  html += '<div class="pin-move-menu-header">Move or copy to...</div>';
-  activeInvs.forEach(function(inv) {
-    html += '<div class="pin-move-menu-item" onclick="movePin(\'' + pinId + '\',\'' + inv.id + '\')">&#8594; ' + escHtml(inv.name) + '</div>';
-    html += '<div class="pin-move-menu-item" onclick="copyPin(\'' + pinId + '\',\'' + inv.id + '\')">&#128203; Copy to ' + escHtml(inv.name) + '</div>';
-  });
+
+  // Move/Copy toggle
+  html += '<div class="pin-move-mode-toggle">'
+    + '<button type="button" class="pin-move-mode-btn active" data-mode="move" onclick="setMoveMenuMode(\'move\')">&#8594; Move</button>'
+    + '<button type="button" class="pin-move-mode-btn" data-mode="copy" onclick="setMoveMenuMode(\'copy\')">&#128203; Copy</button>'
+    + '</div>';
+
+  // Search input
+  html += '<div class="pin-move-search-wrap">'
+    + '<input type="text" class="pin-move-search" id="moveMenuSearch" placeholder="Search investigations..." oninput="onMoveMenuSearch(this.value)">'
+    + '</div>';
+
+  // Active list container
+  html += '<div class="pin-move-list" id="moveMenuActiveList"></div>';
+
+  // Archived section
+  html += '<div class="pin-move-archived-wrap">'
+    + '<div class="pin-move-archived-toggle" id="moveMenuArchivedToggle" onclick="toggleMoveMenuArchived()">'
+    + '<span class="pin-move-archived-arrow" id="moveMenuArchivedArrow">&#9654;</span> '
+    + 'Archived <span class="count-badge" id="moveMenuArchivedCount">0</span>'
+    + '</div>'
+    + '<div class="pin-move-archived-list" id="moveMenuArchivedList" style="display:none;"></div>'
+    + '</div>';
+
   html += '</div>';
   btnEl.closest('.pin-action-bar').insertAdjacentHTML('beforeend', html);
+
+  renderMoveMenuLists();
+
+  // Focus the search input for immediate typing
+  var searchInput = document.getElementById('moveMenuSearch');
+  if (searchInput) searchInput.focus();
+
   setTimeout(function() { document.addEventListener('click', closeMoveMenu); }, 50);
+}
+
+function renderMoveMenuLists() {
+  if (!_moveMenuPinId) return;
+  var pinId = _moveMenuPinId;
+  var q = _moveMenuSearch.toLowerCase();
+
+  var activeInvs = _investigations.filter(function(i) {
+    return !i.completed_at && i.id !== _currentReportId && (!q || i.name.toLowerCase().indexOf(q) !== -1);
+  });
+  var archivedInvs = _investigations.filter(function(i) {
+    return !!i.completed_at && i.id !== _currentReportId && (!q || i.name.toLowerCase().indexOf(q) !== -1);
+  });
+
+  var icon = _moveMenuMode === 'move' ? '&#8594;' : '&#128203;';
+
+  var activeHtml = '';
+  if (activeInvs.length === 0) {
+    activeHtml = '<div class="pin-move-empty">' + (q ? 'No matches' : 'No active investigations') + '</div>';
+  } else {
+    activeInvs.forEach(function(inv) {
+      activeHtml += '<div class="pin-move-menu-item" onclick="handleMoveMenuClick(\'' + pinId + '\',\'' + inv.id + '\')">' + icon + ' ' + escHtml(inv.name) + '</div>';
+    });
+  }
+  var activeEl = document.getElementById('moveMenuActiveList');
+  if (activeEl) activeEl.innerHTML = activeHtml;
+
+  var archivedHtml = '';
+  if (archivedInvs.length === 0) {
+    archivedHtml = '<div class="pin-move-empty">' + (q ? 'No matches' : 'No archived investigations') + '</div>';
+  } else {
+    archivedInvs.forEach(function(inv) {
+      archivedHtml += '<div class="pin-move-menu-item" onclick="handleMoveMenuClick(\'' + pinId + '\',\'' + inv.id + '\')">' + icon + ' ' + escHtml(inv.name) + '</div>';
+    });
+  }
+  var archivedEl = document.getElementById('moveMenuArchivedList');
+  if (archivedEl) archivedEl.innerHTML = archivedHtml;
+
+  var countEl = document.getElementById('moveMenuArchivedCount');
+  if (countEl) countEl.textContent = archivedInvs.length;
+}
+
+function setMoveMenuMode(mode) {
+  _moveMenuMode = mode;
+  var btns = document.querySelectorAll('#moveMenu .pin-move-mode-btn');
+  btns.forEach(function(b) {
+    if (b.getAttribute('data-mode') === mode) b.classList.add('active');
+    else b.classList.remove('active');
+  });
+  renderMoveMenuLists();
+}
+
+function onMoveMenuSearch(value) {
+  _moveMenuSearch = value;
+  renderMoveMenuLists();
+}
+
+function toggleMoveMenuArchived() {
+  _moveMenuShowArchived = !_moveMenuShowArchived;
+  var list = document.getElementById('moveMenuArchivedList');
+  var arrow = document.getElementById('moveMenuArchivedArrow');
+  if (list) list.style.display = _moveMenuShowArchived ? '' : 'none';
+  if (arrow) arrow.innerHTML = _moveMenuShowArchived ? '&#9660;' : '&#9654;';
+}
+
+function handleMoveMenuClick(pinId, targetInvId) {
+  if (_moveMenuMode === 'copy') {
+    copyPin(pinId, targetInvId);
+  } else {
+    movePin(pinId, targetInvId);
+  }
 }
 
 function closeMoveMenu() {
   var menu = document.getElementById('moveMenu');
   if (menu) menu.remove();
+  _moveMenuPinId = null;
   document.removeEventListener('click', closeMoveMenu);
 }
 

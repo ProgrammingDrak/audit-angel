@@ -79,7 +79,6 @@ function renderNoteColorSwatches() {
   });
   var noneActive = !_noteColor ? ' active' : '';
   html += '<span class="color-swatch sw-none' + noneActive + '" onclick="setNoteColor(null)" title="None"></span>';
-  html += '<span class="color-swatch" style="background:none;border:1px dashed var(--border);font-size:9px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-muted);cursor:pointer;" onclick="showAddColorPopover(this,function(){renderNoteColorSwatches();})" title="Add custom color">+</span>';
   container.innerHTML = html;
 }
 

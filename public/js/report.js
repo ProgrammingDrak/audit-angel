@@ -102,17 +102,11 @@ function renderReportPins(inv) {
     sortedPins.sort(function(a, b) { return new Date(a.pinned_at) - new Date(b.pinned_at); });
   }
 
-  var totalImages = 0;
   var html = '';
   sortedPins.forEach(function(pin, idx) {
     html += renderSinglePin(pin, idx, inv.id);
-    totalImages += (pin.images || []).length;
-    (pin.children || []).forEach(function(child) { totalImages += (child.images || []).length; });
   });
   body.innerHTML = html;
-
-  var imgCount = document.getElementById('imgCount');
-  if (imgCount) imgCount.textContent = totalImages > 0 ? totalImages + ' image' + (totalImages !== 1 ? 's' : '') : '';
 
   applyColorFilter();
   initPinDragHandlers();
@@ -217,8 +211,19 @@ function enterPinNoteEdit(displayEl) {
   var pinId = displayEl.getAttribute('data-pin');
   var editor = displayEl.nextElementSibling;
   if (!editor || !editor.classList.contains('pin-note-editor')) return;
+
+  // Measure display element BEFORE hiding so the editor can match its footprint
+  var rect = displayEl.getBoundingClientRect();
+  var width = rect.width;
+  var height = Math.max(displayEl.offsetHeight, 36);
+
   displayEl.style.display = 'none';
   editor.style.display = '';
+  editor.style.boxSizing = 'border-box';
+  editor.style.width = width + 'px';
+  editor.style.height = height + 'px';
+  editor.style.padding = '6px 10px';
+  editor.style.lineHeight = '1.5';
   editor.focus();
   editor.selectionStart = editor.selectionEnd = editor.value.length;
   setupSmartLinkPaste(editor);
@@ -233,6 +238,11 @@ function enterPinNoteEdit(displayEl) {
       displayEl.className = 'pin-note-display pin-note-empty';
       displayEl.innerHTML = 'Click to add a note...';
     }
+    // Clear inline sizing so the next edit re-measures fresh
+    editor.style.width = '';
+    editor.style.height = '';
+    editor.style.padding = '';
+    editor.style.lineHeight = '';
     editor.style.display = 'none';
     displayEl.style.display = '';
   };
@@ -250,7 +260,6 @@ function renderColorPicker(pinId, currentColor) {
   });
   var noneActive = !currentColor ? ' active' : '';
   html += '<span class="color-swatch sw-none' + noneActive + '" style="width:14px;height:14px;" onclick="setPinColor(\'' + pinId + '\',null)" title="None"></span>';
-  html += '<span class="color-swatch" style="width:14px;height:14px;background:none;border:1px dashed var(--border);font-size:9px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-muted);" onclick="event.stopPropagation();showAddColorPopover(this,function(){refreshReport();})" title="Add custom color">+</span>';
   html += '</span>';
   return html;
 }
@@ -367,6 +376,8 @@ function updateColorFilterUI() {
     });
     var noneActive = _colorFilters.indexOf('none') !== -1 ? ' active' : '';
     html += '<span class="color-swatch sw-none' + noneActive + '" onclick="toggleColorFilter(\'none\')" title="Uncolored"></span>';
+    // Add-custom-color button — adding a color here makes it available to all pin/note pickers globally
+    html += '<span class="color-swatch color-swatch-add" onclick="showAddColorPopover(this,function(){updateColorFilterUI();refreshReport();})" title="Add custom color">+</span>';
     container.innerHTML = html;
   }
   var clearBtn = document.getElementById('filterClearBtn');

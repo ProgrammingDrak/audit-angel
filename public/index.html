@@ -96,24 +96,25 @@
     </div>
     <!-- ===== NOTES TAB ===== -->
     <div id="tabNotes">
-      <div style="padding:8px 24px;border-bottom:1px solid #F3F4F6;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-        <button class="btn-sm btn-primary" onclick="showAddNoteForm()">+ Add Note</button>
-        <button class="btn-sm btn-light" id="toggleImagesBtn" onclick="toggleImages()">Hide Images</button>
-        <button class="btn-sm btn-light" onclick="collapseAllPins()">Collapse All</button>
-        <button class="btn-sm btn-light" onclick="expandAllPins()">Expand All</button>
-        <select id="sortDropdown" class="btn-sm btn-light" onchange="changePinSort(this.value)" style="padding:4px 10px;font-family:Poppins,sans-serif;font-size:12px;font-weight:600;cursor:pointer;appearance:auto;">
-          <option value="newest">Newest first</option>
-          <option value="oldest">Oldest first</option>
-          <option value="custom">Custom order</option>
-        </select>
-        <span style="font-size:10px;color:#6B7280;margin-left:auto;" id="imgCount"></span>
-      </div>
-      <!-- Color filter bar (dynamic — includes custom colors) -->
-      <div class="color-filter-bar" id="reportColorFilter" style="padding:6px 24px;border-bottom:1px solid #F3F4F6;">
-        <span class="filter-label">Filter:</span>
-        <span id="filterSwatches" style="display:inline-flex;align-items:center;gap:10px;"></span>
-        <button id="filterClearBtn" onclick="clearColorFilter()" class="btn-sm btn-light" style="display:none;">Clear</button>
-        <span id="filterStatus" class="filter-status"></span>
+      <div class="notes-toolbar" id="notesToolbar">
+        <div class="notes-toolbar-left">
+          <button class="btn-sm btn-primary" onclick="showAddNoteForm()">+ Add Note</button>
+          <button class="btn-sm btn-light" id="toggleImagesBtn" onclick="toggleImages()">Hide Images</button>
+          <button class="btn-sm btn-light" onclick="collapseAllPins()">Collapse All</button>
+          <button class="btn-sm btn-light" onclick="expandAllPins()">Expand All</button>
+          <select id="sortDropdown" class="btn-sm btn-light" onchange="changePinSort(this.value)" style="padding:4px 10px;font-family:Poppins,sans-serif;font-size:12px;font-weight:600;cursor:pointer;appearance:auto;">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="custom">Custom order</option>
+          </select>
+        </div>
+        <!-- Color filter (dynamic — includes custom colors) -->
+        <div class="color-filter-bar" id="reportColorFilter">
+          <span class="filter-label">Filter:</span>
+          <span id="filterSwatches" style="display:inline-flex;align-items:center;gap:6px;"></span>
+          <button id="filterClearBtn" onclick="clearColorFilter()" class="btn-sm btn-light" style="display:none;">Clear</button>
+          <span id="filterStatus" class="filter-status"></span>
+        </div>
       </div>
       <!-- Add note form -->
       <div id="addNoteFormWrap" style="padding:12px 24px;border-bottom:1px solid #F3F4F6;display:none;">
