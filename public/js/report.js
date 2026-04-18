@@ -156,6 +156,7 @@ function renderSinglePin(pin, idx, invId) {
     pin.images.forEach(function(img) {
       html += '<div class="pin-image-wrap">';
       html += '<img src="' + img.data_url + '" alt="' + escHtml(img.caption || '') + '" onclick="window.open(this.src)">';
+      html += '<button class="pin-image-delete" onclick="event.stopPropagation();deletePinImage(\'' + img.id + '\')" title="Remove image">&times;</button>';
       if (img.caption || img.link) {
         html += '<div class="pin-image-meta">';
         if (img.caption) html += '<div>' + escHtml(img.caption) + '</div>';
@@ -165,6 +166,11 @@ function renderSinglePin(pin, idx, invId) {
       html += '</div>';
     });
     html += '</div>';
+  }
+
+  // Add image button (always available on saved pins)
+  if (!_imagesHidden) {
+    html += '<button class="pin-add-image-btn" onclick="event.stopPropagation();addImageToPin(\'' + pin.id + '\')" title="Add image (or paste into the note)">&#128206; Add Image</button>';
   }
 
   // Note (read-only with edit-on-click)
@@ -227,6 +233,7 @@ function enterPinNoteEdit(displayEl) {
   editor.focus();
   editor.selectionStart = editor.selectionEnd = editor.value.length;
   setupSmartLinkPaste(editor);
+  setupPinImagePaste(editor, pinId);
   editor.onblur = function() {
     var newNote = editor.value;
     updatePinNote(pinId, newNote);

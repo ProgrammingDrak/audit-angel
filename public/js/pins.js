@@ -251,6 +251,61 @@ async function copyPin(pinId, targetInvId) {
   showToast('Pin copied');
 }
 
+// --- Add/remove images on saved pins ---
+function addImageToPin(pinId) {
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.accept = 'image/*';
+  input.multiple = true;
+  input.onchange = function() { handlePinImageFiles(pinId, input.files); };
+  input.click();
+}
+
+function handlePinImageFiles(pinId, files) {
+  if (!files || files.length === 0) return;
+  var remaining = 0;
+  for (var i = 0; i < files.length; i++) {
+    if (!files[i].type.startsWith('image/')) continue;
+    remaining++;
+    (function(file) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        compressImage(e.target.result, async function(compressed) {
+          await API.addImages(pinId, { data_url: compressed, caption: '', link: '' });
+          remaining--;
+          if (remaining === 0) {
+            await refreshReport();
+            showToast('Image added');
+          }
+        });
+      };
+      reader.readAsDataURL(file);
+    })(files[i]);
+  }
+}
+
+async function deletePinImage(imageId) {
+  if (!confirm('Remove this image?')) return;
+  await API.deleteImage(imageId);
+  await refreshReport();
+  showToast('Image removed');
+}
+
+function setupPinImagePaste(editor, pinId) {
+  editor.addEventListener('paste', function(e) {
+    var items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        e.preventDefault();
+        var file = items[i].getAsFile();
+        handlePinImageFiles(pinId, [file]);
+        break;
+      }
+    }
+  });
+}
+
 async function togglePinSummary(pinId, addToSummary) {
   closeMoveMenu();
   await API.updatePin(pinId, { in_summary: addToSummary });

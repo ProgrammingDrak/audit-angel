@@ -420,6 +420,29 @@ body {
 .pin-image-meta a { color: #7CB9F0; text-decoration: none; pointer-events: auto; }
 .pin-image-meta a:hover { text-decoration: underline; }
 .pin-image-wrap:hover .pin-image-meta { opacity: 1; }
+.pin-image-delete {
+  position: absolute; top: 4px; right: 4px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: rgba(0,0,0,0.6); color: #fff;
+  border: none; font-size: 14px; line-height: 1; cursor: pointer;
+  opacity: 0; transition: opacity 0.15s, background 0.15s;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 2;
+}
+.pin-image-wrap:hover .pin-image-delete { opacity: 1; }
+.pin-image-delete:hover { background: #DC2626; }
+.pin-add-image-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; margin: 4px 0 8px;
+  background: var(--bg-light); color: var(--text-secondary);
+  border: 1px dashed var(--border-light); border-radius: 6px;
+  font-size: 11px; font-weight: 500; cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.pin-add-image-btn:hover {
+  border-color: var(--blue); color: var(--blue);
+  background: rgba(0,117,235,0.04); border-style: solid;
+}
 
 /* Pin data table */
 .pin-data-table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 8px 0; }
