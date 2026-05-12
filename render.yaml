@@ -14,10 +14,21 @@ services:
       - key: NODE_VERSION
         value: 22.22.0
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: audit-angel-db
+          property: connectionString
       - key: SESSION_SECRET
         generateValue: true
       - key: DEFAULT_USER_EMAIL
         sync: false
       - key: DEFAULT_USER_PASSWORD
         sync: false
+
+databases:
+  - name: audit-angel-db
+    plan: basic-256mb
+    region: ohio
+    databaseName: audit_angel
+    user: audit_angel
+    diskSizeGB: 1
+    storageAutoscalingEnabled: false
