@@ -26,9 +26,7 @@ services:
 
 databases:
   - name: audit-angel-db
-    plan: basic-256mb
+    plan: free
     region: ohio
     databaseName: audit_angel
     user: audit_angel
-    diskSizeGB: 1
-    storageAutoscalingEnabled: false
