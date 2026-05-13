@@ -92,7 +92,7 @@ async function openMarkupArtifact(artifactId) {
 
 function closeMarkupWorkspace() {
   document.getElementById('markupOverlay').classList.remove('active');
-  document.body.style.overflow = '';
+  document.body.style.overflow = document.getElementById('reportOverlay').classList.contains('active') ? 'hidden' : '';
   _markup.artifact = null;
   _markup.annotations = [];
   _markup.selectedId = null;
@@ -420,17 +420,52 @@ function deleteSelectedMarkup() {
 
 async function saveCurrentMarkup() {
   if (!_markup.artifact) return;
-  var updated = await API.updateMarkupArtifact(_markup.artifact.id, {
-    annotations: _markup.annotations,
-    page_meta: _markup.pageMeta
-  });
-  if (!updated || updated.error) {
-    showToast((updated && updated.error) || 'Could not save markup');
-    return;
+  var saveBtn = document.getElementById('markupSaveBtn');
+  var originalText = saveBtn ? saveBtn.textContent : '';
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
   }
-  _markup.artifact = updated;
-  showToast('Markup saved');
-  if (_currentReportId) await refreshReport();
+  try {
+    var updated = await API.updateMarkupArtifact(_markup.artifact.id, {
+      annotations: _markup.annotations,
+      page_meta: _markup.pageMeta
+    });
+    if (!updated || updated.error) {
+      showToast((updated && updated.error) || 'Could not save markup');
+      return;
+    }
+    _markup.artifact = updated;
+    var invId = updated.investigation_id || _currentReportId;
+    var pinId = updated.pin_id;
+
+    if (_currentReportId) {
+      await refreshReport();
+      switchReportTab('notes');
+    } else if (invId) {
+      await openReport(invId);
+    }
+
+    closeMarkupWorkspace();
+    showToast('Markup saved');
+    focusMarkupActivityPin(pinId);
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = originalText || 'Save';
+    }
+  }
+}
+
+function focusMarkupActivityPin(pinId) {
+  if (!pinId) return;
+  setTimeout(function() {
+    var pin = document.getElementById('pin-' + pinId);
+    if (!pin) return;
+    pin.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    pin.classList.add('pin-save-focus');
+    setTimeout(function() { pin.classList.remove('pin-save-focus'); }, 1600);
+  }, 100);
 }
 
 function exportCurrentMarkup() {
