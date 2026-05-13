@@ -150,8 +150,26 @@ function renderSinglePin(pin, idx, invId) {
   // Details
   html += '<div class="pin-details">';
 
+  if ((pin.type || '') === 'markup') {
+    var artifactId = pin.data && pin.data.artifactId;
+    var annCount = pin.data && pin.data.annotationCount ? pin.data.annotationCount : 0;
+    var sourceName = (pin.data && pin.data.sourceName) || pin.source || pin.title || 'Markup Artifact';
+    var sourceType = (pin.data && pin.data.sourceType) || 'markup';
+    html += '<div class="pin-markup-preview">';
+    html += '<div class="pin-markup-icon">&#9998;</div>';
+    html += '<div class="pin-markup-meta">';
+    html += '<div class="pin-markup-title">' + escHtml(sourceName) + '</div>';
+    html += '<div class="pin-markup-sub">' + escHtml(sourceType.toUpperCase()) + ' · ' + annCount + ' annotation' + (annCount === 1 ? '' : 's') + '</div>';
+    html += '</div>';
+    if (artifactId) {
+      html += '<button class="btn-sm btn-primary" onclick="event.stopPropagation();openMarkupPin(\'' + artifactId + '\')">Open</button>';
+      html += '<button class="btn-sm btn-light" onclick="event.stopPropagation();window.location.href=API.exportMarkupArtifactUrl(\'' + artifactId + '\')">Export</button>';
+    }
+    html += '</div>';
+  }
+
   // Images
-  if (pin.images && pin.images.length > 0 && !_imagesHidden) {
+  if ((pin.type || '') !== 'markup' && pin.images && pin.images.length > 0 && !_imagesHidden) {
     html += '<div class="pin-image-gallery">';
     pin.images.forEach(function(img) {
       html += '<div class="pin-image-wrap">';
@@ -169,7 +187,7 @@ function renderSinglePin(pin, idx, invId) {
   }
 
   // Add image button (always available on saved pins)
-  if (!_imagesHidden) {
+  if ((pin.type || '') !== 'markup' && !_imagesHidden) {
     html += '<button class="pin-add-image-btn" onclick="event.stopPropagation();addImageToPin(\'' + pin.id + '\')" title="Add image (or paste into the note)">&#128206; Add Image</button>';
   }
 
@@ -187,7 +205,7 @@ function renderSinglePin(pin, idx, invId) {
   // Data fields
   var data = pin.data || {};
   var keys = Object.keys(data);
-  if (keys.length > 0) {
+  if ((pin.type || '') !== 'markup' && keys.length > 0) {
     html += '<table class="pin-data-table">';
     keys.forEach(function(k) {
       var val = data[k];
@@ -433,6 +451,7 @@ function switchReportTab(tab) {
   var notesTab = document.getElementById('tabNotes');
   var summaryTab = document.getElementById('tabSummary');
   var addNoteBtn = document.getElementById('actionAddNote');
+  var addMarkupBtn = document.getElementById('actionAddMarkup');
 
   document.querySelectorAll('.report-tab').forEach(function(btn) {
     btn.classList.toggle('active', btn.dataset.tab === tab);
@@ -442,10 +461,12 @@ function switchReportTab(tab) {
     notesTab.style.display = '';
     summaryTab.style.display = 'none';
     if (addNoteBtn) addNoteBtn.style.display = '';
+    if (addMarkupBtn) addMarkupBtn.style.display = '';
   } else {
     notesTab.style.display = 'none';
     summaryTab.style.display = '';
     if (addNoteBtn) addNoteBtn.style.display = 'none';
+    if (addMarkupBtn) addMarkupBtn.style.display = 'none';
     hideAddNoteForm();
     renderSummaryPins();
   }
@@ -487,7 +508,17 @@ function renderSummaryPin(pin) {
   html += '</div>';
 
   html += '<div class="pin-details">';
-  if (pin.images && pin.images.length > 0) {
+  if ((pin.type || '') === 'markup') {
+    var artifactId = pin.data && pin.data.artifactId;
+    var annCount = pin.data && pin.data.annotationCount ? pin.data.annotationCount : 0;
+    html += '<div class="pin-markup-preview">';
+    html += '<div class="pin-markup-icon">&#9998;</div>';
+    html += '<div class="pin-markup-meta"><div class="pin-markup-title">' + escHtml((pin.data && pin.data.sourceName) || pin.title || 'Markup Artifact') + '</div>';
+    html += '<div class="pin-markup-sub">' + annCount + ' annotation' + (annCount === 1 ? '' : 's') + '</div></div>';
+    if (artifactId) html += '<button class="btn-sm btn-primary" onclick="openMarkupPin(\'' + artifactId + '\')">Open</button>';
+    html += '</div>';
+  }
+  if ((pin.type || '') !== 'markup' && pin.images && pin.images.length > 0) {
     html += '<div class="pin-image-gallery">';
     pin.images.forEach(function(img) {
       html += '<div class="pin-image-wrap">';
@@ -501,7 +532,7 @@ function renderSummaryPin(pin) {
   }
   var data = pin.data || {};
   var keys = Object.keys(data);
-  if (keys.length > 0) {
+  if ((pin.type || '') !== 'markup' && keys.length > 0) {
     html += '<table class="pin-data-table">';
     keys.forEach(function(k) {
       var val = data[k];

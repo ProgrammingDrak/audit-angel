@@ -86,6 +86,25 @@ async function initDB() {
 
       CREATE INDEX IF NOT EXISTS idx_pin_images_pin ON pin_images(pin_id);
 
+      CREATE TABLE IF NOT EXISTS markup_artifacts (
+        id                 TEXT PRIMARY KEY,
+        investigation_id   TEXT NOT NULL REFERENCES investigations(id) ON DELETE CASCADE,
+        pin_id             TEXT NOT NULL UNIQUE REFERENCES pins(id) ON DELETE CASCADE,
+        created_by         INTEGER NOT NULL REFERENCES users(id),
+        source_type        TEXT NOT NULL,
+        source_name        TEXT NOT NULL DEFAULT '',
+        source_mime        TEXT NOT NULL DEFAULT '',
+        source_content     TEXT NOT NULL,
+        annotations        JSONB NOT NULL DEFAULT '[]',
+        page_meta          JSONB NOT NULL DEFAULT '{}',
+        thumbnail_data_url TEXT NOT NULL DEFAULT '',
+        created_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_markup_artifacts_inv ON markup_artifacts(investigation_id);
+      CREATE INDEX IF NOT EXISTS idx_markup_artifacts_pin ON markup_artifacts(pin_id);
+
       CREATE TABLE IF NOT EXISTS dismissed_anomalies (
         id           SERIAL PRIMARY KEY,
         user_id      INTEGER NOT NULL REFERENCES users(id),
@@ -345,10 +364,15 @@ async function reorderPins(invId, items) {
 }
 
 async function movePin(pinId, toInvId) {
-  return queryOne(
+  const moved = await queryOne(
     "UPDATE pins SET investigation_id = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
     [toInvId, pinId]
   );
+  await query(
+    "UPDATE markup_artifacts SET investigation_id = $1, updated_at = NOW() WHERE pin_id = $2",
+    [toInvId, pinId]
+  );
+  return moved;
 }
 
 async function copyPin(pinId, toInvId, newPinId, userId) {
@@ -376,7 +400,89 @@ async function copyPin(pinId, toInvId, newPinId, userId) {
       [newPinId, img.data_url, img.caption, img.link, img.sort_order]
     );
   }
+  if (original.type === "markup") {
+    const artifact = await getMarkupArtifactByPin(pinId);
+    if (artifact) {
+      const newArtifactId = "markup_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+      await createMarkupArtifact({
+        id: newArtifactId,
+        investigation_id: toInvId,
+        pin_id: newPinId,
+        created_by: userId,
+        source_type: artifact.source_type,
+        source_name: artifact.source_name,
+        source_mime: artifact.source_mime,
+        source_content: artifact.source_content,
+        annotations: artifact.annotations,
+        page_meta: artifact.page_meta,
+        thumbnail_data_url: artifact.thumbnail_data_url,
+      });
+      await updatePinData(newPinId, {
+        ...(copied.data || {}),
+        artifactId: newArtifactId,
+      });
+      copied.data = { ...(copied.data || {}), artifactId: newArtifactId };
+    }
+  }
   return copied;
+}
+
+async function updatePinData(pinId, data) {
+  return queryOne(
+    "UPDATE pins SET data = $1, updated_at = NOW() WHERE id = $2 RETURNING *",
+    [JSON.stringify(data || {}), pinId]
+  );
+}
+
+// ── Markup Artifacts ──
+
+async function createMarkupArtifact(artifact) {
+  return queryOne(`
+    INSERT INTO markup_artifacts (
+      id, investigation_id, pin_id, created_by, source_type, source_name, source_mime,
+      source_content, annotations, page_meta, thumbnail_data_url
+    )
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    RETURNING *
+  `, [
+    artifact.id,
+    artifact.investigation_id,
+    artifact.pin_id,
+    artifact.created_by,
+    artifact.source_type,
+    artifact.source_name || "",
+    artifact.source_mime || "",
+    artifact.source_content,
+    JSON.stringify(artifact.annotations || []),
+    JSON.stringify(artifact.page_meta || {}),
+    artifact.thumbnail_data_url || "",
+  ]);
+}
+
+async function getMarkupArtifact(id) {
+  return queryOne("SELECT * FROM markup_artifacts WHERE id = $1", [id]);
+}
+
+async function getMarkupArtifactByPin(pinId) {
+  return queryOne("SELECT * FROM markup_artifacts WHERE pin_id = $1", [pinId]);
+}
+
+async function updateMarkupArtifact(id, fields) {
+  const allowed = ["annotations", "page_meta", "thumbnail_data_url"];
+  const sets = [];
+  const vals = [];
+  let idx = 1;
+  for (const key of allowed) {
+    if (fields[key] !== undefined) {
+      sets.push(`${key} = $${idx}`);
+      vals.push(key === "thumbnail_data_url" ? (fields[key] || "") : JSON.stringify(fields[key] || (key === "annotations" ? [] : {})));
+      idx++;
+    }
+  }
+  if (sets.length === 0) return null;
+  sets.push("updated_at = NOW()");
+  vals.push(id);
+  return queryOne(`UPDATE markup_artifacts SET ${sets.join(", ")} WHERE id = $${idx} RETURNING *`, vals);
 }
 
 // ── Pin Images ──
@@ -454,7 +560,8 @@ module.exports = {
   getInvestigationsForUser, getInvestigation, createInvestigation, updateInvestigation, deleteInvestigation,
   canAccessInvestigation, isInvestigationOwner,
   getMembers, addMember, removeMember,
-  getPinsForInvestigation, createPin, updatePin, deletePin, getPinInvestigationId, reorderPins, movePin, copyPin,
+  getPinsForInvestigation, createPin, updatePin, updatePinData, deletePin, getPinInvestigationId, reorderPins, movePin, copyPin,
+  createMarkupArtifact, getMarkupArtifact, getMarkupArtifactByPin, updateMarkupArtifact,
   getImagesForPin, addImage, deleteImage,
   getDismissedAnomalies, dismissAnomaly, restoreAnomaly,
   getBonusConfig, saveBonusConfig,

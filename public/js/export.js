@@ -37,6 +37,9 @@ function exportInvHTML() {
     + '.pin-note{font-size:13px;color:#374151;line-height:1.6;margin:8px 0;white-space:pre-wrap;}'
     + '.pin-img{max-width:100%;border-radius:8px;border:1px solid var(--border);margin:8px 0;}'
     + '.pin-img-caption{font-size:10px;color:var(--text-sec);margin-bottom:4px;}'
+    + '.markup-card{display:flex;align-items:center;gap:12px;border:1px solid var(--border);border-radius:8px;padding:12px;background:#fff;margin:8px 0;}'
+    + '.markup-icon{width:44px;height:44px;border-radius:8px;background:var(--blue-light);color:var(--blue);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:18px;}'
+    + '.markup-meta{flex:1;min-width:0}.markup-name{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.markup-sub{font-size:11px;color:var(--text-sec);margin-top:2px}.markup-link{font-size:12px;font-weight:700;color:var(--blue);text-decoration:none;}'
     + '.pin-data{width:100%;border-collapse:collapse;font-size:12px;margin:8px 0;}'
     + '.pin-data td{padding:4px 8px;border-bottom:1px solid #F3F4F6;}'
     + '.pin-data td:first-child{font-weight:600;color:var(--text-sec);white-space:nowrap;width:140px;}'
@@ -100,7 +103,20 @@ function renderExportPin(pin) {
   html += '</div>';
 
   // Images
-  if (pin.images && pin.images.length > 0) {
+  if ((pin.type || '') === 'markup') {
+    var artifactId = pin.data && pin.data.artifactId;
+    var annCount = pin.data && pin.data.annotationCount ? pin.data.annotationCount : 0;
+    var sourceName = (pin.data && pin.data.sourceName) || pin.source || pin.title || 'Markup Artifact';
+    html += '<div class="markup-card"><div class="markup-icon">&#9998;</div><div class="markup-meta">'
+      + '<div class="markup-name">' + escHtml(sourceName) + '</div>'
+      + '<div class="markup-sub">' + annCount + ' annotation' + (annCount === 1 ? '' : 's') + ' &middot; Annotated review artifact</div>'
+      + '</div>';
+    if (artifactId) html += '<a class="markup-link" href="' + window.location.origin + API.exportMarkupArtifactUrl(artifactId) + '">Open annotated export</a>';
+    html += '</div>';
+  }
+
+  // Images
+  if ((pin.type || '') !== 'markup' && pin.images && pin.images.length > 0) {
     pin.images.forEach(function(img) {
       if (img.caption) html += '<div class="pin-img-caption">' + escHtml(img.caption) + '</div>';
       html += '<img class="pin-img" src="' + img.data_url + '">';
@@ -114,7 +130,7 @@ function renderExportPin(pin) {
   // Data
   var data = pin.data || {};
   var keys = Object.keys(data);
-  if (keys.length > 0) {
+  if ((pin.type || '') !== 'markup' && keys.length > 0) {
     html += '<table class="pin-data">';
     keys.forEach(function(k) {
       var val = data[k];
@@ -235,6 +251,12 @@ function _formatPinAI(pin, num, imageMode, headingLevel) {
   if (pin.pinned_at) md += '- Date: ' + pin.pinned_at + '\n';
   if (pin.in_summary) md += '- Key Finding: yes\n';
   if (pin.note) md += '- Note: ' + pin.note.replace(/\n/g, ' ') + '\n';
+  if ((pin.type || '') === 'markup') {
+    var artifact = pin.data || {};
+    md += '- Markup artifact: ' + (artifact.sourceName || pin.source || pin.title || '') + '\n';
+    md += '- Annotation count: ' + (artifact.annotationCount || 0) + '\n\n';
+    return md;
+  }
 
   var data = pin.data || {};
   var entries = [];
