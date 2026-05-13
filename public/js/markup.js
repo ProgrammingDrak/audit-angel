@@ -438,17 +438,24 @@ async function saveCurrentMarkup() {
     _markup.artifact = updated;
     var invId = updated.investigation_id || _currentReportId;
     var pinId = updated.pin_id;
+    var reportReady = false;
 
-    if (_currentReportId) {
-      await refreshReport();
-      switchReportTab('notes');
-    } else if (invId) {
-      await openReport(invId);
+    try {
+      if (_currentReportId) {
+        await refreshReport();
+        switchReportTab('notes');
+        reportReady = true;
+      } else if (invId) {
+        await openReport(invId);
+        reportReady = true;
+      }
+    } catch (err) {
+      console.error('Saved markup, but could not reload report', err);
     }
 
     closeMarkupWorkspace();
-    showToast('Markup saved');
-    focusMarkupActivityPin(pinId);
+    showToast(reportReady ? 'Markup saved' : 'Markup saved. Refresh the report to see the latest pin.');
+    if (reportReady) focusMarkupActivityPin(pinId);
   } finally {
     if (saveBtn) {
       saveBtn.disabled = false;
