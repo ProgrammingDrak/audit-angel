@@ -31,6 +31,18 @@ var API = {
   async addPin(invId, pin) {
     return this._fetch('/api/investigations/' + invId + '/pins', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pin) });
   },
+  async createMarkupArtifact(invId, artifact) {
+    return this._fetch('/api/investigations/' + invId + '/markup-artifacts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(artifact) });
+  },
+  async getMarkupArtifact(artifactId) {
+    return this._fetch('/api/markup-artifacts/' + artifactId);
+  },
+  async updateMarkupArtifact(artifactId, fields) {
+    return this._fetch('/api/markup-artifacts/' + artifactId, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) });
+  },
+  exportMarkupArtifactUrl(artifactId) {
+    return '/api/markup-artifacts/' + artifactId + '/export';
+  },
   async updatePin(pinId, fields) {
     return this._fetch('/api/pins/' + pinId, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) });
   },
@@ -38,10 +50,10 @@ var API = {
     return this._fetch('/api/pins/' + pinId, { method: 'DELETE' });
   },
   async movePin(pinId, targetInvId) {
-    return this._fetch('/api/pins/' + pinId + '/move', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_investigation_id: targetInvId }) });
+    return this._fetch('/api/pins/' + pinId + '/move', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ toInvestigationId: targetInvId }) });
   },
   async copyPin(pinId, targetInvId) {
-    return this._fetch('/api/pins/' + pinId + '/copy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target_investigation_id: targetInvId }) });
+    return this._fetch('/api/pins/' + pinId + '/copy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ toInvestigationId: targetInvId }) });
   },
   async reorderPins(invId, pinIds) {
     var items = pinIds.map(function(id, i) { return { pin_id: id, sort_order: i }; });

@@ -8,6 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="icon" type="image/png" href="/logo.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
@@ -99,6 +100,7 @@
       <div class="notes-toolbar" id="notesToolbar">
         <div class="notes-toolbar-left">
           <button class="btn-sm btn-primary" onclick="showAddNoteForm()">+ Add Note</button>
+          <button class="btn-sm btn-primary" onclick="startMarkupImport()">+ Markup</button>
           <button class="btn-sm btn-light" id="toggleImagesBtn" onclick="toggleImages()">Hide Images</button>
           <button class="btn-sm btn-light" onclick="collapseAllPins()">Collapse All</button>
           <button class="btn-sm btn-light" onclick="expandAllPins()">Expand All</button>
@@ -155,6 +157,7 @@
     <!-- Actions -->
     <div class="modal-actions">
       <button class="btn-sm btn-primary" id="actionAddNote" onclick="showAddNoteForm()">+ Add Note</button>
+      <button class="btn-sm btn-primary" id="actionAddMarkup" onclick="startMarkupImport()">+ Markup</button>
       <span style="position:relative;display:inline-block;">
         <button class="btn-sm btn-primary" onclick="toggleExportDropdown()">&#8681; Export</button>
         <div id="exportDropdown" style="display:none;position:absolute;bottom:100%;left:0;margin-bottom:8px;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow-lg);min-width:280px;z-index:100;overflow:hidden;">
@@ -184,6 +187,51 @@
   </div>
 </div>
 
+<input type="file" id="markupImportInput" accept=".html,.htm,.pdf,image/*" style="display:none" onchange="handleMarkupImport(this)">
+
+<!-- Markup workspace -->
+<div class="markup-overlay" id="markupOverlay">
+  <div class="markup-shell">
+    <header class="markup-header">
+      <div>
+        <div class="markup-title" id="markupTitle">Markup</div>
+        <div class="markup-subtitle" id="markupSubtitle"></div>
+      </div>
+      <div class="markup-actions">
+        <button class="btn-sm btn-light" onclick="exportCurrentMarkup()">Export HTML</button>
+        <button class="btn-sm btn-primary" onclick="saveCurrentMarkup()">Save</button>
+        <button class="modal-close" onclick="closeMarkupWorkspace()">&times;</button>
+      </div>
+    </header>
+    <div class="markup-body">
+      <aside class="markup-tools">
+        <button class="markup-tool active" data-tool="select" onclick="setMarkupTool('select')" title="Select or move">Select</button>
+        <button class="markup-tool" data-tool="marker" onclick="setMarkupTool('marker')" title="Marker box">Marker</button>
+        <button class="markup-tool" data-tool="highlight" onclick="setMarkupTool('highlight')" title="Highlight">Highlight</button>
+        <button class="markup-tool" data-tool="arrow" onclick="setMarkupTool('arrow')" title="Arrow">Arrow</button>
+        <button class="markup-tool" data-tool="text" onclick="setMarkupTool('text')" title="Text box">Text</button>
+        <button class="markup-tool" data-tool="pen" onclick="setMarkupTool('pen')" title="Freehand pen">Pen</button>
+        <label class="markup-field">Color <input type="color" id="markupColor" value="#DC2626" onchange="updateSelectedMarkupStyle()"></label>
+        <label class="markup-field">Stroke <input type="range" id="markupStroke" min="1" max="10" value="3" onchange="updateSelectedMarkupStyle()"></label>
+        <button class="btn-sm btn-light" onclick="deleteSelectedMarkup()">Delete</button>
+      </aside>
+      <main class="markup-stage-wrap" id="markupStageWrap">
+        <div class="markup-stage" id="markupStage"></div>
+      </main>
+      <aside class="markup-inspector">
+        <div class="markup-inspector-title">Annotations</div>
+        <div class="markup-inspector-list" id="markupAnnotationList"></div>
+        <div class="markup-editor" id="markupEditor" style="display:none;">
+          <label class="field-label">Visible text</label>
+          <input type="text" id="markupTextInput" class="text-input" oninput="updateSelectedMarkupText()" placeholder="Optional label">
+          <label class="field-label">Summary comment</label>
+          <textarea id="markupSummaryInput" class="text-area" oninput="updateSelectedMarkupSummary()" placeholder="Explain what should change or why this matters..."></textarea>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
 <!-- Toast container -->
 <div id="toastContainer"></div>
 
@@ -194,6 +242,7 @@
 <script src="/js/pins.js"></script>
 <script src="/js/report.js"></script>
 <script src="/js/capture.js"></script>
+<script src="/js/markup.js"></script>
 <script src="/js/export.js"></script>
 <script src="/js/app.js"></script>
 </body>

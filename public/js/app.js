@@ -69,7 +69,9 @@ document.addEventListener('DOMContentLoaded', function() {
   // Keyboard shortcuts
   document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
-      if (document.getElementById('reportOverlay').classList.contains('active')) {
+      if (document.getElementById('markupOverlay') && document.getElementById('markupOverlay').classList.contains('active')) {
+        closeMarkupWorkspace();
+      } else if (document.getElementById('reportOverlay').classList.contains('active')) {
         closeReport();
       }
     }

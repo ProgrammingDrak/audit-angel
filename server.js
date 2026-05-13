@@ -18,6 +18,7 @@ const auth = require("./auth");
 
 const app = express();
 const PORT = process.env.PORT || 3456;
+const MAX_MARKUP_SOURCE_BYTES = 5 * 1024 * 1024;
 
 // Trust Railway/Heroku/Render proxy so secure cookies work behind HTTPS termination
 app.set("trust proxy", 1);
@@ -61,6 +62,149 @@ async function broadcastToInvestigation(eventType, invId, data) {
       client.res.write(`data: ${payload}\n\n`);
     }
   }
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function safeJson(value) {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
+function estimateSourceBytes(sourceContent) {
+  if (!sourceContent) return 0;
+  const match = String(sourceContent).match(/^data:[^;]+;base64,(.*)$/);
+  if (match) return Math.floor(match[1].length * 3 / 4);
+  return Buffer.byteLength(sourceContent, "utf8");
+}
+
+function normalizeMarkupArtifact(row) {
+  if (!row) return null;
+  if (typeof row.annotations === "string") {
+    try { row.annotations = JSON.parse(row.annotations); } catch(e) { row.annotations = []; }
+  }
+  if (typeof row.page_meta === "string") {
+    try { row.page_meta = JSON.parse(row.page_meta); } catch(e) { row.page_meta = {}; }
+  }
+  row.annotations = Array.isArray(row.annotations) ? row.annotations : [];
+  row.page_meta = row.page_meta && typeof row.page_meta === "object" ? row.page_meta : {};
+  return row;
+}
+
+async function canAccessMarkupArtifact(artifactId, userId) {
+  const artifact = normalizeMarkupArtifact(await db.getMarkupArtifact(artifactId));
+  if (!artifact) return null;
+  const hasAccess = await db.canAccessInvestigation(artifact.investigation_id, userId);
+  return hasAccess ? artifact : null;
+}
+
+function markupPinData(artifact) {
+  return {
+    artifactId: artifact.id,
+    sourceType: artifact.source_type,
+    sourceName: artifact.source_name,
+    sourceMime: artifact.source_mime,
+    annotationCount: (artifact.annotations || []).length,
+    thumbnailDataUrl: artifact.thumbnail_data_url || "",
+  };
+}
+
+function renderAnnotationSvg(annotations, page) {
+  const pageAnnotations = (annotations || []).filter((ann) => Number(ann.page || 0) === page);
+  const parts = [];
+  for (const ann of pageAnnotations) {
+    const id = escapeHtml(ann.id || "");
+    const color = escapeHtml(ann.color || "#DC2626");
+    const stroke = Math.max(1, Number(ann.strokeWidth || 3));
+    const x = Number(ann.x || 0) * 100;
+    const y = Number(ann.y || 0) * 100;
+    const w = Number(ann.w || 0.18) * 100;
+    const h = Number(ann.h || 0.08) * 100;
+    const common = `id="ann_${id}" data-ann-id="${id}" class="ann-node"`;
+    if (ann.type === "arrow") {
+      const x2 = Number(ann.x2 || ann.x || 0) * 100;
+      const y2 = Number(ann.y2 || ann.y || 0) * 100;
+      parts.push(`<line ${common} x1="${x}" y1="${y}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="${stroke}" marker-end="url(#arrowHead)" />`);
+    } else if (ann.type === "pen" && Array.isArray(ann.points) && ann.points.length) {
+      const d = ann.points.map((pt, idx) => `${idx ? "L" : "M"} ${Number(pt.x || 0) * 100} ${Number(pt.y || 0) * 100}`).join(" ");
+      parts.push(`<path ${common} d="${escapeHtml(d)}" fill="none" stroke="${color}" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round" />`);
+    } else if (ann.type === "text") {
+      parts.push(`<foreignObject ${common} x="${x}" y="${y}" width="${Math.max(w, 14)}" height="${Math.max(h, 7)}"><div xmlns="http://www.w3.org/1999/xhtml" class="ann-text" style="border-color:${color};">${escapeHtml(ann.text || ann.summary || "Note")}</div></foreignObject>`);
+    } else {
+      const fill = ann.type === "highlight" ? color : "none";
+      const opacity = ann.type === "highlight" ? "0.22" : "1";
+      parts.push(`<rect ${common} x="${x}" y="${y}" width="${Math.max(w, 1)}" height="${Math.max(h, 1)}" rx="1" fill="${fill}" fill-opacity="${opacity}" stroke="${color}" stroke-width="${stroke}" />`);
+    }
+  }
+  return `<svg class="export-overlay" viewBox="0 0 100 100" preserveAspectRatio="none">
+    <defs><marker id="arrowHead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#DC2626"></path></marker></defs>
+    ${parts.join("")}
+  </svg>`;
+}
+
+function renderMarkupExport(artifact) {
+  artifact = normalizeMarkupArtifact(artifact);
+  const annotations = artifact.annotations || [];
+  const pageCount = Math.max(1, Number(artifact.page_meta && artifact.page_meta.pageCount) || 1);
+  const title = artifact.source_name || "Annotated Artifact";
+  let documentHtml = "";
+
+  if (artifact.source_type === "html") {
+    documentHtml += `<section class="doc-page" id="page-0"><iframe class="html-frame" sandbox="" srcdoc="${escapeHtml(artifact.source_content)}"></iframe>${renderAnnotationSvg(annotations, 0)}</section>`;
+  } else if (artifact.source_type === "image") {
+    documentHtml += `<section class="doc-page" id="page-0" style="min-height:0;"><img class="source-image" src="${escapeHtml(artifact.source_content)}" alt="${escapeHtml(title)}">${renderAnnotationSvg(annotations, 0)}</section>`;
+  } else {
+    for (let i = 0; i < pageCount; i++) {
+      documentHtml += `<section class="doc-page pdf-page" id="page-${i}" data-page="${i + 1}"><canvas></canvas>${renderAnnotationSvg(annotations, i)}</section>`;
+    }
+  }
+
+  const summaryHtml = annotations.length ? annotations.map((ann, idx) => {
+    const annId = escapeHtml(ann.id || "");
+    const page = Number(ann.page || 0);
+    const summary = ann.summary || ann.text || "(No summary provided)";
+    return `<article class="summary-item" id="summary_${annId}" data-ann-id="${annId}">
+      <div class="summary-meta">Annotation ${idx + 1} · ${escapeHtml(ann.type || "marker")} · Page ${page + 1}</div>
+      <p>${escapeHtml(summary)}</p>
+      <a href="#ann_${annId}" onclick="viewAnnotation('${annId}', ${page});return false;">View in document</a>
+    </article>`;
+  }).join("") : `<div class="empty">No annotations yet.</div>`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${escapeHtml(title)} - Annotated Review</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+body{margin:0;background:#f6f7f9;color:#161E26;font-family:Arial,sans-serif;}
+header{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #ddd;padding:14px 20px;display:flex;align-items:center;gap:12px;}
+h1{font-size:18px;margin:0;flex:1}.tabs{display:flex;gap:8px}.tabs button{border:1px solid #ccd2dc;background:#fff;border-radius:6px;padding:7px 12px;cursor:pointer}.tabs button.active{background:#0075EB;color:#fff;border-color:#0075EB}
+.view{display:none;padding:20px}.view.active{display:block}.doc-wrap{max-width:1100px;margin:0 auto}.doc-page{position:relative;background:#fff;border:1px solid #ddd;margin:0 auto 18px;min-height:620px;box-shadow:0 8px 24px rgba(15,23,42,.08)}.html-frame{width:100%;height:760px;border:0}.source-image{display:block;max-width:100%;margin:0 auto}.pdf-page canvas{display:block;width:100%}.export-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:auto}.ann-node{cursor:pointer}.ann-node.active{filter:drop-shadow(0 0 6px #0075EB)}.ann-text{background:#fff;border:2px solid #DC2626;border-radius:4px;padding:6px;font-size:13px;line-height:1.35;box-sizing:border-box;height:100%;overflow:hidden}
+.summary-list{max-width:860px;margin:0 auto}.summary-item{background:#fff;border:1px solid #ddd;border-left:4px solid #0075EB;border-radius:8px;padding:16px;margin-bottom:12px}.summary-item.active{box-shadow:0 0 0 3px rgba(0,117,235,.18)}.summary-meta{font-size:12px;color:#657184;font-weight:700;text-transform:uppercase;letter-spacing:.04em}.summary-item a{font-size:13px;font-weight:700;color:#0075EB}.empty{text-align:center;color:#657184;padding:40px}
+</style>
+</head>
+<body>
+<header><h1>${escapeHtml(title)}</h1><div class="tabs"><button id="tabDoc" class="active" onclick="switchTab('doc')">Annotated Document</button><button id="tabSummary" onclick="switchTab('summary')">Summary</button></div></header>
+<main id="viewDoc" class="view active"><div class="doc-wrap">${documentHtml}</div></main>
+<main id="viewSummary" class="view"><div class="summary-list">${summaryHtml}</div></main>
+<script>
+var artifact=${safeJson({ sourceType: artifact.source_type, sourceContent: artifact.source_content })};
+function switchTab(tab){document.getElementById('viewDoc').classList.toggle('active',tab==='doc');document.getElementById('viewSummary').classList.toggle('active',tab==='summary');document.getElementById('tabDoc').classList.toggle('active',tab==='doc');document.getElementById('tabSummary').classList.toggle('active',tab==='summary');}
+function clearActive(){document.querySelectorAll('.active.ann-node,.summary-item.active').forEach(function(el){el.classList.remove('active');});}
+function selectAnnotation(id){clearActive();var ann=document.getElementById('ann_'+id);var sum=document.getElementById('summary_'+id);if(ann)ann.classList.add('active');if(sum)sum.classList.add('active');}
+function viewAnnotation(id,page){switchTab('doc');setTimeout(function(){selectAnnotation(id);var ann=document.getElementById('ann_'+id)||document.getElementById('page_'+page);if(ann)ann.scrollIntoView({behavior:'smooth',block:'center'});},50);}
+document.addEventListener('click',function(e){var ann=e.target.closest&&e.target.closest('.ann-node');if(ann){var id=ann.getAttribute('data-ann-id');selectAnnotation(id);var sum=document.getElementById('summary_'+id);if(sum){setTimeout(function(){switchTab('summary');sum.scrollIntoView({behavior:'smooth',block:'center'});},150);}}});
+if(artifact.sourceType==='pdf'&&window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';pdfjsLib.getDocument(artifact.sourceContent).promise.then(function(pdf){document.querySelectorAll('.pdf-page').forEach(function(pageEl){var n=Number(pageEl.dataset.page);pdf.getPage(n).then(function(page){var viewport=page.getViewport({scale:1.4});var canvas=pageEl.querySelector('canvas');var ctx=canvas.getContext('2d');canvas.width=viewport.width;canvas.height=viewport.height;pageEl.style.width=viewport.width+'px';pageEl.style.minHeight=viewport.height+'px';page.render({canvasContext:ctx,viewport:viewport});});});});}
+</script>
+</body>
+</html>`;
 }
 
 // ── Auth Middleware ──
@@ -196,6 +340,12 @@ app.get("/api/investigations/:id", async (req, res) => {
     for (const pin of pins) {
       pin.images = await db.getImagesForPin(pin.id);
       if (typeof pin.data === "string") try { pin.data = JSON.parse(pin.data); } catch(e) {}
+      if (pin.type === "markup") {
+        const artifact = normalizeMarkupArtifact(await db.getMarkupArtifactByPin(pin.id));
+        if (artifact) {
+          pin.data = { ...(pin.data || {}), ...markupPinData(artifact) };
+        }
+      }
     }
     inv.pins = pins;
     res.json(inv);
@@ -447,18 +597,19 @@ app.post("/api/pins/:pinId/move", async (req, res) => {
   try {
     const fromInvId = await db.getPinInvestigationId(req.params.pinId);
     if (!fromInvId) return res.status(404).json({ error: "Pin not found" });
+    const toInvestigationId = req.body.toInvestigationId || req.body.target_investigation_id;
     const hasAccessFrom = await db.canAccessInvestigation(fromInvId, req.session.userId);
-    const hasAccessTo = await db.canAccessInvestigation(req.body.toInvestigationId, req.session.userId);
+    const hasAccessTo = await db.canAccessInvestigation(toInvestigationId, req.session.userId);
     if (!hasAccessFrom || !hasAccessTo) return res.status(403).json({ error: "Access denied" });
 
-    const moved = await db.movePin(req.params.pinId, req.body.toInvestigationId);
+    const moved = await db.movePin(req.params.pinId, toInvestigationId);
 
     broadcastToInvestigation("pin-moved", fromInvId, {
       pinId: req.params.pinId,
-      toInvestigationId: req.body.toInvestigationId,
+      toInvestigationId,
       _clientId: req.body._clientId,
     });
-    broadcastToInvestigation("pin-added", req.body.toInvestigationId, {
+    broadcastToInvestigation("pin-added", toInvestigationId, {
       pin: moved,
       _clientId: req.body._clientId,
     });
@@ -473,14 +624,15 @@ app.post("/api/pins/:pinId/copy", async (req, res) => {
   try {
     const fromInvId = await db.getPinInvestigationId(req.params.pinId);
     if (!fromInvId) return res.status(404).json({ error: "Pin not found" });
+    const toInvestigationId = req.body.toInvestigationId || req.body.target_investigation_id;
     const hasAccessFrom = await db.canAccessInvestigation(fromInvId, req.session.userId);
-    const hasAccessTo = await db.canAccessInvestigation(req.body.toInvestigationId, req.session.userId);
+    const hasAccessTo = await db.canAccessInvestigation(toInvestigationId, req.session.userId);
     if (!hasAccessFrom || !hasAccessTo) return res.status(403).json({ error: "Access denied" });
 
     const newPinId = "pin_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
-    const copied = await db.copyPin(req.params.pinId, req.body.toInvestigationId, newPinId, req.session.userId);
+    const copied = await db.copyPin(req.params.pinId, toInvestigationId, newPinId, req.session.userId);
 
-    broadcastToInvestigation("pin-added", req.body.toInvestigationId, {
+    broadcastToInvestigation("pin-added", toInvestigationId, {
       pin: copied,
       _clientId: req.body._clientId,
     });
@@ -488,6 +640,123 @@ app.post("/api/pins/:pinId/copy", async (req, res) => {
   } catch (err) {
     console.error("[api] Copy pin error:", err);
     res.status(500).json({ error: "Failed to copy pin" });
+  }
+});
+
+// ── Markup Artifacts ──
+app.post("/api/investigations/:id/markup-artifacts", async (req, res) => {
+  try {
+    const hasAccess = await db.canAccessInvestigation(req.params.id, req.session.userId);
+    if (!hasAccess) return res.status(403).json({ error: "Access denied" });
+
+    const { sourceType, sourceName, sourceMime, sourceContent, title, note } = req.body;
+    if (!["html", "pdf", "image"].includes(sourceType)) {
+      return res.status(400).json({ error: "Unsupported source type" });
+    }
+    if (!sourceContent || estimateSourceBytes(sourceContent) > MAX_MARKUP_SOURCE_BYTES) {
+      return res.status(400).json({ error: "Markup source is required and must be 5 MB or smaller" });
+    }
+
+    const pinId = req.body.pinId || "pin_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
+    const artifactId = req.body.id || "markup_" + Date.now() + "_" + Math.random().toString(36).substr(2, 8);
+    const maxSort = await db.queryOne(
+      "SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM pins WHERE investigation_id = $1 AND parent_pin_id IS NULL",
+      [req.params.id]
+    );
+
+    const pin = await db.createPin({
+      id: pinId,
+      investigation_id: req.params.id,
+      parent_pin_id: null,
+      created_by: req.session.userId,
+      type: "markup",
+      source: sourceName || "Markup Artifact",
+      title: title || sourceName || "Markup Artifact",
+      note: note || "",
+      color: null,
+      data: {
+        artifactId,
+        sourceType,
+        sourceName: sourceName || "",
+        sourceMime: sourceMime || "",
+        annotationCount: 0,
+      },
+      filters: {},
+      sort_order: maxSort.next,
+    });
+
+    const artifact = normalizeMarkupArtifact(await db.createMarkupArtifact({
+      id: artifactId,
+      investigation_id: req.params.id,
+      pin_id: pinId,
+      created_by: req.session.userId,
+      source_type: sourceType,
+      source_name: sourceName || "",
+      source_mime: sourceMime || "",
+      source_content: sourceContent,
+      annotations: [],
+      page_meta: { pageCount: 1 },
+      thumbnail_data_url: "",
+    }));
+
+    pin.data = { ...(pin.data || {}), ...markupPinData(artifact) };
+    broadcastToInvestigation("pin-added", req.params.id, {
+      pin,
+      _clientId: req.body._clientId,
+    });
+    res.json({ pin, artifact });
+  } catch (err) {
+    console.error("[api] Create markup artifact error:", err);
+    res.status(500).json({ error: "Failed to create markup artifact" });
+  }
+});
+
+app.get("/api/markup-artifacts/:artifactId", async (req, res) => {
+  try {
+    const artifact = await canAccessMarkupArtifact(req.params.artifactId, req.session.userId);
+    if (!artifact) return res.status(404).json({ error: "Markup artifact not found" });
+    res.json(artifact);
+  } catch (err) {
+    console.error("[api] Get markup artifact error:", err);
+    res.status(500).json({ error: "Failed to get markup artifact" });
+  }
+});
+
+app.patch("/api/markup-artifacts/:artifactId", async (req, res) => {
+  try {
+    const artifact = await canAccessMarkupArtifact(req.params.artifactId, req.session.userId);
+    if (!artifact) return res.status(404).json({ error: "Markup artifact not found" });
+
+    const updated = normalizeMarkupArtifact(await db.updateMarkupArtifact(req.params.artifactId, {
+      annotations: Array.isArray(req.body.annotations) ? req.body.annotations : artifact.annotations,
+      page_meta: req.body.page_meta || req.body.pageMeta || artifact.page_meta,
+      thumbnail_data_url: req.body.thumbnail_data_url || req.body.thumbnailDataUrl || artifact.thumbnail_data_url || "",
+    }));
+
+    await db.updatePinData(artifact.pin_id, markupPinData(updated));
+    broadcastToInvestigation("pin-updated", artifact.investigation_id, {
+      pinId: artifact.pin_id,
+      markupUpdated: true,
+      _clientId: req.body._clientId,
+    });
+    res.json(updated);
+  } catch (err) {
+    console.error("[api] Update markup artifact error:", err);
+    res.status(500).json({ error: "Failed to update markup artifact" });
+  }
+});
+
+app.get("/api/markup-artifacts/:artifactId/export", async (req, res) => {
+  try {
+    const artifact = await canAccessMarkupArtifact(req.params.artifactId, req.session.userId);
+    if (!artifact) return res.status(404).json({ error: "Markup artifact not found" });
+    const filename = (artifact.source_name || "annotated-artifact").replace(/[^a-zA-Z0-9 _.-]/g, "").replace(/\s+/g, "-").toLowerCase();
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename || "annotated-artifact"}-review.html"`);
+    res.send(renderMarkupExport(artifact));
+  } catch (err) {
+    console.error("[api] Export markup artifact error:", err);
+    res.status(500).json({ error: "Failed to export markup artifact" });
   }
 });
 
