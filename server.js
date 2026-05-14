@@ -99,6 +99,8 @@ function normalizeMarkupArtifact(row) {
 async function canAccessMarkupArtifact(artifactId, userId) {
   const artifact = normalizeMarkupArtifact(await db.getMarkupArtifact(artifactId));
   if (!artifact) return null;
+  if (Number(artifact.created_by) === Number(userId)) return artifact;
+  if (!artifact.investigation_id) return null;
   const hasAccess = await db.canAccessInvestigation(artifact.investigation_id, userId);
   return hasAccess ? artifact : null;
 }
@@ -112,6 +114,43 @@ function markupPinData(artifact) {
     annotationCount: (artifact.annotations || []).length,
     thumbnailDataUrl: artifact.thumbnail_data_url || "",
   };
+}
+
+function validateMarkupSource(sourceType, sourceContent) {
+  if (!["html", "pdf", "image"].includes(sourceType)) {
+    return "Unsupported source type";
+  }
+  if (!sourceContent || estimateSourceBytes(sourceContent) > MAX_MARKUP_SOURCE_BYTES) {
+    return "Markup source is required and must be 5 MB or smaller";
+  }
+  return "";
+}
+
+async function createMarkupPinForInvestigation(artifact, invId, userId, body) {
+  const pinId = body.pinId || "pin_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
+  const maxSort = await db.queryOne(
+    "SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM pins WHERE investigation_id = $1 AND parent_pin_id IS NULL",
+    [invId]
+  );
+
+  const pin = await db.createPin({
+    id: pinId,
+    investigation_id: invId,
+    parent_pin_id: null,
+    created_by: userId,
+    type: "markup",
+    source: artifact.source_name || "Markup Artifact",
+    title: body.title || artifact.source_name || "Markup Artifact",
+    note: body.note || "",
+    color: null,
+    data: markupPinData(artifact),
+    filters: {},
+    sort_order: body.sort_order != null ? body.sort_order : maxSort.next,
+  });
+
+  const attached = normalizeMarkupArtifact(await db.attachMarkupArtifact(artifact.id, invId, pinId));
+  pin.data = { ...(pin.data || {}), ...markupPinData(attached) };
+  return { pin, artifact: attached };
 }
 
 function renderAnnotationSvg(annotations, page) {
@@ -650,45 +689,14 @@ app.post("/api/investigations/:id/markup-artifacts", async (req, res) => {
     if (!hasAccess) return res.status(403).json({ error: "Access denied" });
 
     const { sourceType, sourceName, sourceMime, sourceContent, title, note } = req.body;
-    if (!["html", "pdf", "image"].includes(sourceType)) {
-      return res.status(400).json({ error: "Unsupported source type" });
-    }
-    if (!sourceContent || estimateSourceBytes(sourceContent) > MAX_MARKUP_SOURCE_BYTES) {
-      return res.status(400).json({ error: "Markup source is required and must be 5 MB or smaller" });
-    }
+    const validationError = validateMarkupSource(sourceType, sourceContent);
+    if (validationError) return res.status(400).json({ error: validationError });
 
-    const pinId = req.body.pinId || "pin_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
     const artifactId = req.body.id || "markup_" + Date.now() + "_" + Math.random().toString(36).substr(2, 8);
-    const maxSort = await db.queryOne(
-      "SELECT COALESCE(MAX(sort_order), -1) + 1 AS next FROM pins WHERE investigation_id = $1 AND parent_pin_id IS NULL",
-      [req.params.id]
-    );
-
-    const pin = await db.createPin({
-      id: pinId,
-      investigation_id: req.params.id,
-      parent_pin_id: null,
-      created_by: req.session.userId,
-      type: "markup",
-      source: sourceName || "Markup Artifact",
-      title: title || sourceName || "Markup Artifact",
-      note: note || "",
-      color: null,
-      data: {
-        artifactId,
-        sourceType,
-        sourceName: sourceName || "",
-        sourceMime: sourceMime || "",
-        annotationCount: 0,
-      },
-      filters: {},
-      sort_order: maxSort.next,
-    });
-
     const artifact = normalizeMarkupArtifact(await db.createMarkupArtifact({
       id: artifactId,
-      investigation_id: req.params.id,
-      pin_id: pinId,
+      investigation_id: null,
+      pin_id: null,
       created_by: req.session.userId,
       source_type: sourceType,
       source_name: sourceName || "",
@@ -699,14 +707,57 @@ app.post("/api/investigations/:id/markup-artifacts", async (req, res) => {
       thumbnail_data_url: "",
     }));
 
-    pin.data = { ...(pin.data || {}), ...markupPinData(artifact) };
+    const { pin, artifact: attached } = await createMarkupPinForInvestigation(artifact, req.params.id, req.session.userId, {
+      pinId: req.body.pinId,
+      title,
+      note,
+    });
     broadcastToInvestigation("pin-added", req.params.id, {
       pin,
       _clientId: req.body._clientId,
     });
-    res.json({ pin, artifact });
+    res.json({ pin, artifact: attached });
   } catch (err) {
     console.error("[api] Create markup artifact error:", err);
+    res.status(500).json({ error: "Failed to create markup artifact" });
+  }
+});
+
+app.get("/api/markup-artifacts", async (req, res) => {
+  try {
+    if (req.query.standalone !== "1") return res.status(400).json({ error: "Unsupported markup artifact query" });
+    const artifacts = (await db.getStandaloneMarkupArtifactsForUser(req.session.userId)).map(normalizeMarkupArtifact);
+    res.json(artifacts);
+  } catch (err) {
+    console.error("[api] List markup artifacts error:", err);
+    res.status(500).json({ error: "Failed to list markup artifacts" });
+  }
+});
+
+app.post("/api/markup-artifacts", async (req, res) => {
+  try {
+    const { sourceType, sourceName, sourceMime, sourceContent } = req.body;
+    const validationError = validateMarkupSource(sourceType, sourceContent);
+    if (validationError) return res.status(400).json({ error: validationError });
+
+    const artifactId = req.body.id || "markup_" + Date.now() + "_" + Math.random().toString(36).substr(2, 8);
+    const artifact = normalizeMarkupArtifact(await db.createMarkupArtifact({
+      id: artifactId,
+      investigation_id: null,
+      pin_id: null,
+      created_by: req.session.userId,
+      source_type: sourceType,
+      source_name: sourceName || "",
+      source_mime: sourceMime || "",
+      source_content: sourceContent,
+      annotations: [],
+      page_meta: { pageCount: 1 },
+      thumbnail_data_url: "",
+    }));
+
+    res.json({ artifact });
+  } catch (err) {
+    console.error("[api] Create standalone markup artifact error:", err);
     res.status(500).json({ error: "Failed to create markup artifact" });
   }
 });
@@ -722,6 +773,43 @@ app.get("/api/markup-artifacts/:artifactId", async (req, res) => {
   }
 });
 
+app.post("/api/markup-artifacts/:artifactId/attach", async (req, res) => {
+  try {
+    const artifact = await canAccessMarkupArtifact(req.params.artifactId, req.session.userId);
+    if (!artifact) return res.status(404).json({ error: "Markup artifact not found" });
+    if (artifact.pin_id || artifact.investigation_id) {
+      return res.status(409).json({ error: "Markup artifact is already attached" });
+    }
+
+    let investigation = null;
+    let invId = req.body.investigationId || req.body.investigation_id || req.body.targetInvestigationId;
+    const createName = (req.body.createInvestigationName || "").trim();
+
+    if (createName) {
+      invId = req.body.newInvestigationId || "inv_" + Date.now();
+      investigation = await db.createInvestigation(invId, req.session.userId, createName);
+      broadcastToInvestigation("investigation-created", invId, {
+        investigation,
+        _clientId: req.body._clientId,
+      });
+    } else {
+      if (!invId) return res.status(400).json({ error: "Investigation is required" });
+      const hasAccess = await db.canAccessInvestigation(invId, req.session.userId);
+      if (!hasAccess) return res.status(403).json({ error: "Access denied" });
+    }
+
+    const { pin, artifact: attached } = await createMarkupPinForInvestigation(artifact, invId, req.session.userId, req.body);
+    broadcastToInvestigation("pin-added", invId, {
+      pin,
+      _clientId: req.body._clientId,
+    });
+    res.json({ pin, artifact: attached, investigation });
+  } catch (err) {
+    console.error("[api] Attach markup artifact error:", err);
+    res.status(500).json({ error: "Failed to attach markup artifact" });
+  }
+});
+
 app.patch("/api/markup-artifacts/:artifactId", async (req, res) => {
   try {
     const artifact = await canAccessMarkupArtifact(req.params.artifactId, req.session.userId);
@@ -733,12 +821,16 @@ app.patch("/api/markup-artifacts/:artifactId", async (req, res) => {
       thumbnail_data_url: req.body.thumbnail_data_url || req.body.thumbnailDataUrl || artifact.thumbnail_data_url || "",
     }));
 
-    await db.updatePinData(artifact.pin_id, markupPinData(updated));
-    broadcastToInvestigation("pin-updated", artifact.investigation_id, {
-      pinId: artifact.pin_id,
-      markupUpdated: true,
-      _clientId: req.body._clientId,
-    });
+    if (artifact.pin_id) {
+      await db.updatePinData(artifact.pin_id, markupPinData(updated));
+    }
+    if (artifact.investigation_id) {
+      broadcastToInvestigation("pin-updated", artifact.investigation_id, {
+        pinId: artifact.pin_id,
+        markupUpdated: true,
+        _clientId: req.body._clientId,
+      });
+    }
     res.json(updated);
   } catch (err) {
     console.error("[api] Update markup artifact error:", err);

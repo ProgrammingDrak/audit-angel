@@ -9,14 +9,21 @@ var _markup = {
   tool: 'select',
   selectedId: null,
   draft: null,
-  moving: null
+  moving: null,
+  importMode: 'investigation'
 };
 
 function startMarkupImport() {
   if (!_currentReportId) {
-    showToast('Open an investigation first');
+    startStandaloneMarkupImport();
     return;
   }
+  _markup.importMode = 'investigation';
+  document.getElementById('markupImportInput').click();
+}
+
+function startStandaloneMarkupImport() {
+  _markup.importMode = 'standalone';
   document.getElementById('markupImportInput').click();
 }
 
@@ -42,19 +49,22 @@ function handleMarkupImport(input) {
 
   var reader = new FileReader();
   reader.onload = async function(e) {
-    var result = await API.createMarkupArtifact(_currentReportId, {
+    var payload = {
       sourceType: sourceType,
       sourceName: name,
       sourceMime: file.type || '',
       sourceContent: e.target.result,
       title: name,
       note: ''
-    });
+    };
+    var result = _markup.importMode === 'standalone'
+      ? await API.createStandaloneMarkupArtifact(payload)
+      : await API.createMarkupArtifact(_currentReportId, payload);
     if (!result || result.error) {
       showToast((result && result.error) || 'Could not create markup artifact');
       return;
     }
-    await refreshReport();
+    if (_markup.importMode !== 'standalone') await refreshReport();
     await loadInvestigations();
     openMarkupArtifact(result.artifact.id);
   };
@@ -85,6 +95,7 @@ async function openMarkupArtifact(artifactId) {
   document.getElementById('markupOverlay').classList.add('active');
   document.body.style.overflow = 'hidden';
   setMarkupTool('select');
+  renderMarkupAttachActions();
   await renderMarkupSource();
   renderMarkupAnnotations();
   renderMarkupInspector();
@@ -96,6 +107,7 @@ function closeMarkupWorkspace() {
   _markup.artifact = null;
   _markup.annotations = [];
   _markup.selectedId = null;
+  renderMarkupAttachActions();
 }
 
 function setMarkupTool(tool) {
@@ -294,6 +306,7 @@ function renderMarkupAnnotations() {
     });
   });
   document.getElementById('markupSubtitle').textContent = (_markup.artifact.source_type || '').toUpperCase() + ' · ' + _markup.annotations.length + ' annotations';
+  renderMarkupAttachActions();
   renderMarkupInspector();
 }
 
@@ -427,15 +440,18 @@ async function saveCurrentMarkup() {
     saveBtn.textContent = 'Saving...';
   }
   try {
-    var updated = await API.updateMarkupArtifact(_markup.artifact.id, {
-      annotations: _markup.annotations,
-      page_meta: _markup.pageMeta
-    });
+    var updated = await persistCurrentMarkup();
     if (!updated || updated.error) {
       showToast((updated && updated.error) || 'Could not save markup');
       return;
     }
-    _markup.artifact = updated;
+    if (!updated.pin_id && !updated.investigation_id) {
+      await loadInvestigations();
+      showToast('Standalone markup saved');
+      renderMarkupAttachActions();
+      return;
+    }
+
     var invId = updated.investigation_id || _currentReportId;
     var pinId = updated.pin_id;
     var reportReady = false;
@@ -464,6 +480,18 @@ async function saveCurrentMarkup() {
   }
 }
 
+async function persistCurrentMarkup() {
+  if (!_markup.artifact) return null;
+  var updated = await API.updateMarkupArtifact(_markup.artifact.id, {
+    annotations: _markup.annotations,
+    page_meta: _markup.pageMeta
+  });
+  if (updated && !updated.error) {
+    _markup.artifact = updated;
+  }
+  return updated;
+}
+
 function focusMarkupActivityPin(pinId) {
   if (!pinId) return;
   setTimeout(function() {
@@ -473,6 +501,97 @@ function focusMarkupActivityPin(pinId) {
     pin.classList.add('pin-save-focus');
     setTimeout(function() { pin.classList.remove('pin-save-focus'); }, 1600);
   }, 100);
+}
+
+function renderMarkupAttachActions() {
+  var wrap = document.getElementById('markupAttachActions');
+  var select = document.getElementById('markupAttachSelect');
+  if (!wrap || !select) return;
+  var artifact = _markup.artifact;
+  var isStandalone = artifact && !artifact.pin_id && !artifact.investigation_id;
+  wrap.style.display = isStandalone ? '' : 'none';
+  if (!isStandalone) return;
+
+  var options = _investigations.map(function(inv) {
+    return '<option value="' + escHtml(inv.id) + '">' + escHtml(inv.name) + (inv.completed_at ? ' (completed)' : '') + '</option>';
+  }).join('');
+  if (!options) options = '<option value="">No investigations</option>';
+  select.innerHTML = options;
+  select.disabled = _investigations.length === 0;
+}
+
+async function attachSelectedMarkupInvestigation() {
+  var select = document.getElementById('markupAttachSelect');
+  var invId = select && select.value;
+  if (!invId) {
+    showToast('Create an investigation first, or start a new one from this markup');
+    return;
+  }
+  await attachCurrentMarkupToInvestigation(invId);
+}
+
+async function attachCurrentMarkupToInvestigation(invId) {
+  if (!_markup.artifact) return;
+  var saved = await persistCurrentMarkup();
+  if (!saved || saved.error) {
+    showToast((saved && saved.error) || 'Could not save markup before attaching');
+    return;
+  }
+  await attachMarkupArtifactToInvestigation(saved.id, invId);
+}
+
+async function attachStandaloneMarkupToSelected(artifactId) {
+  var select = document.getElementById('standaloneAttachSelect-' + artifactId);
+  var invId = select && select.value;
+  if (!invId) {
+    showToast('Choose an investigation first');
+    return;
+  }
+  await attachMarkupArtifactToInvestigation(artifactId, invId);
+}
+
+async function attachMarkupArtifactToInvestigation(artifactId, invId) {
+  var result = await API.attachMarkupArtifact(artifactId, { investigationId: invId });
+  if (!result || result.error) {
+    showToast((result && result.error) || 'Could not attach markup');
+    return;
+  }
+  await loadInvestigations();
+  await openReport(invId);
+  closeMarkupWorkspace();
+  showToast('Markup attached');
+  focusMarkupActivityPin(result.pin && result.pin.id);
+}
+
+async function createInvestigationFromCurrentMarkup() {
+  if (!_markup.artifact) return;
+  var saved = await persistCurrentMarkup();
+  if (!saved || saved.error) {
+    showToast((saved && saved.error) || 'Could not save markup before attaching');
+    return;
+  }
+  await createInvestigationFromMarkupArtifact(saved.id, saved.source_name || 'Markup Investigation');
+}
+
+async function createInvestigationFromStandaloneMarkup(artifactId) {
+  var artifact = (_standaloneMarkups || []).find(function(a) { return a.id === artifactId; });
+  await createInvestigationFromMarkupArtifact(artifactId, (artifact && artifact.source_name) || 'Markup Investigation');
+}
+
+async function createInvestigationFromMarkupArtifact(artifactId, defaultName) {
+  var name = prompt('New investigation name:', defaultName || 'Markup Investigation');
+  if (!name || !name.trim()) return;
+  var result = await API.attachMarkupArtifact(artifactId, { createInvestigationName: name.trim() });
+  if (!result || result.error) {
+    showToast((result && result.error) || 'Could not create investigation from markup');
+    return;
+  }
+  await loadInvestigations();
+  var invId = (result.investigation && result.investigation.id) || (result.artifact && result.artifact.investigation_id);
+  if (invId) await openReport(invId);
+  closeMarkupWorkspace();
+  showToast('Investigation created from markup');
+  focusMarkupActivityPin(result.pin && result.pin.id);
 }
 
 function exportCurrentMarkup() {

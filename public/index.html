@@ -28,6 +28,7 @@
   <div class="top-bar-right">
     <input type="text" id="searchInput" class="search-input" placeholder="Search investigations..." oninput="filterInvestigations()">
     <button class="btn-primary" onclick="createInvestigation()">+ New Investigation</button>
+    <button class="btn-light" onclick="startStandaloneMarkupImport()">+ New Markup</button>
     <div class="dropdown-wrap">
       <button class="btn-ghost" onclick="toggleMenu('importExportMenu')">Import / Export</button>
       <div class="dropdown-menu" id="importExportMenu">
@@ -55,6 +56,15 @@
 
     <!-- Investigation list -->
     <div id="invList" class="inv-list"></div>
+
+    <!-- Standalone markup list -->
+    <div id="standaloneMarkupSection" class="standalone-markup-section" style="display:none;">
+      <div class="standalone-markup-heading">
+        <span>Standalone Markups</span>
+        <span class="count-badge" id="standaloneMarkupCount">0</span>
+      </div>
+      <div id="standaloneMarkupList" class="standalone-markup-list"></div>
+    </div>
 
     <!-- Completed section -->
     <div id="completedSection" class="completed-section" style="display:none;">
@@ -198,6 +208,11 @@
         <div class="markup-subtitle" id="markupSubtitle"></div>
       </div>
       <div class="markup-actions">
+        <div class="markup-attach-actions" id="markupAttachActions" style="display:none;">
+          <select id="markupAttachSelect" class="markup-attach-select" title="Attach to existing investigation"></select>
+          <button class="btn-sm btn-light" onclick="attachSelectedMarkupInvestigation()">Attach</button>
+          <button class="btn-sm btn-light" onclick="createInvestigationFromCurrentMarkup()">New Investigation</button>
+        </div>
         <button class="btn-sm btn-light" onclick="exportCurrentMarkup()">Export HTML</button>
         <button class="btn-sm btn-primary" id="markupSaveBtn" onclick="saveCurrentMarkup()">Save</button>
         <button class="modal-close" onclick="closeMarkupWorkspace()">&times;</button>
