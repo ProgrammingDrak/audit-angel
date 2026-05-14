@@ -507,6 +507,10 @@ async function updateMarkupArtifact(id, fields) {
   return queryOne(`UPDATE markup_artifacts SET ${sets.join(", ")} WHERE id = $${idx} RETURNING *`, vals);
 }
 
+async function deleteMarkupArtifact(id) {
+  return query("DELETE FROM markup_artifacts WHERE id = $1", [id]);
+}
+
 // ── Pin Images ──
 
 async function getImagesForPin(pinId) {
@@ -583,7 +587,7 @@ module.exports = {
   canAccessInvestigation, isInvestigationOwner,
   getMembers, addMember, removeMember,
   getPinsForInvestigation, createPin, updatePin, updatePinData, deletePin, getPinInvestigationId, reorderPins, movePin, copyPin,
-  createMarkupArtifact, getMarkupArtifact, getStandaloneMarkupArtifactsForUser, getMarkupArtifactByPin, attachMarkupArtifact, updateMarkupArtifact,
+  createMarkupArtifact, getMarkupArtifact, getStandaloneMarkupArtifactsForUser, getMarkupArtifactByPin, attachMarkupArtifact, updateMarkupArtifact, deleteMarkupArtifact,
   getImagesForPin, addImage, deleteImage,
   getDismissedAnomalies, dismissAnomaly, restoreAnomaly,
   getBonusConfig, saveBonusConfig,

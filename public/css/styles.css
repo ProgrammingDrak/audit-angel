@@ -95,6 +95,8 @@ body {
 .btn-sm.btn-primary:hover { background: var(--blue-hover); }
 .btn-sm.btn-light { background: var(--blue-light); color: var(--blue); border: 1px solid rgba(0,117,235,0.2); }
 .btn-sm.btn-light:hover { background: #d0e4fc; }
+.btn-sm.btn-danger { background: none; color: var(--red); border: 1px solid rgba(220,38,38,0.3); }
+.btn-sm.btn-danger:hover { background: var(--red-light); }
 
 /* ===== SEARCH ===== */
 .search-input {
@@ -647,6 +649,12 @@ body {
 .markup-ann-text {
   height: 100%; box-sizing: border-box; overflow: hidden; padding: 6px; border: 2px solid currentColor;
   border-radius: 5px; background: rgba(255,255,255,0.92); font-size: 13px; line-height: 1.35;
+}
+.markup-ann-label {
+  height: 100%; box-sizing: border-box; overflow: hidden; padding: 0.65px 1.05px;
+  border: 0.22px solid currentColor; border-radius: 0.65px; background: rgba(255,255,255,0.96);
+  color: currentColor; font-size: 1.35px; line-height: 1.25; font-weight: 700;
+  white-space: nowrap; text-overflow: ellipsis; box-shadow: 0 0.35px 1px rgba(15,23,42,0.16);
 }
 .markup-inspector-title { font-size: 12px; font-weight: 800; color: var(--dark); margin-bottom: 8px; }
 .markup-ann-item {

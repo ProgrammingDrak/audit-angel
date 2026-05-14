@@ -312,6 +312,7 @@ function renderMarkupAnnotations() {
 
 function createMarkupSvgNode(ann) {
   var ns = 'http://www.w3.org/2000/svg';
+  var group = document.createElementNS(ns, 'g');
   var node;
   var color = ann.color || '#DC2626';
   var stroke = Math.max(0.25, Number(ann.strokeWidth || 3) / 2);
@@ -358,10 +359,60 @@ function createMarkupSvgNode(ann) {
   }
   node.setAttribute('stroke', color);
   node.setAttribute('stroke-width', stroke);
-  node.setAttribute('class', 'markup-ann' + (ann.id === _markup.selectedId ? ' selected' : ''));
-  node.setAttribute('data-ann-id', ann.id);
+  group.setAttribute('class', 'markup-ann' + (ann.id === _markup.selectedId ? ' selected' : ''));
+  group.setAttribute('data-ann-id', ann.id);
   node.style.color = color;
-  return node;
+  group.style.color = color;
+  group.appendChild(node);
+  appendMarkupVisibleTextLabel(group, ann, color);
+  return group;
+}
+
+function appendMarkupVisibleTextLabel(group, ann, color) {
+  var label = (ann.text || '').trim();
+  if (!label || ann.type === 'text') return;
+  var ns = 'http://www.w3.org/2000/svg';
+  var bounds = getMarkupAnnotationBounds(ann);
+  var labelW = Math.max(12, Math.min(36, 5 + (label.length * 0.52)));
+  var labelH = 4.8;
+  var labelX = Math.min(100 - labelW - 1, Math.max(1, bounds.right + 1.1));
+  var labelY = Math.max(1, bounds.top - labelH - 0.9);
+  if (labelY <= 1.1 && bounds.bottom + labelH + 1 <= 99) labelY = bounds.bottom + 0.9;
+  if (labelX < bounds.right && bounds.left - labelW - 1.1 >= 1) labelX = bounds.left - labelW - 1.1;
+
+  var foreignObject = document.createElementNS(ns, 'foreignObject');
+  foreignObject.setAttribute('x', labelX);
+  foreignObject.setAttribute('y', Math.min(100 - labelH - 1, labelY));
+  foreignObject.setAttribute('width', labelW);
+  foreignObject.setAttribute('height', labelH);
+  var div = document.createElement('div');
+  div.className = 'markup-ann-label';
+  div.style.borderColor = color;
+  div.style.color = color;
+  div.textContent = label;
+  foreignObject.appendChild(div);
+  group.appendChild(foreignObject);
+}
+
+function getMarkupAnnotationBounds(ann) {
+  var xs = [(ann.x || 0) * 100];
+  var ys = [(ann.y || 0) * 100];
+  if (ann.x2 !== undefined) xs.push((ann.x2 || 0) * 100);
+  if (ann.y2 !== undefined) ys.push((ann.y2 || 0) * 100);
+  if (ann.w !== undefined) xs.push(((ann.x || 0) + Math.max(ann.w || 0.01, 0.01)) * 100);
+  if (ann.h !== undefined) ys.push(((ann.y || 0) + Math.max(ann.h || 0.01, 0.01)) * 100);
+  if (Array.isArray(ann.points) && ann.points.length) {
+    ann.points.forEach(function(pt) {
+      xs.push((pt.x || 0) * 100);
+      ys.push((pt.y || 0) * 100);
+    });
+  }
+  return {
+    left: Math.max(0, Math.min.apply(null, xs)),
+    right: Math.min(100, Math.max.apply(null, xs)),
+    top: Math.max(0, Math.min.apply(null, ys)),
+    bottom: Math.min(100, Math.max.apply(null, ys))
+  };
 }
 
 function renderMarkupInspector() {

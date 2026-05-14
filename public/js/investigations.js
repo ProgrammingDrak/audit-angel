@@ -101,8 +101,24 @@ function renderStandaloneMarkupCard(artifact) {
     + '<select class="standalone-attach-select" id="' + selectId + '"' + (_investigations.length ? '' : ' disabled') + '>' + invOptions + '</select>'
     + '<button class="btn-sm btn-light" onclick="attachStandaloneMarkupToSelected(\'' + artifact.id + '\')"' + (_investigations.length ? '' : ' disabled') + '>Attach</button>'
     + '<button class="btn-sm btn-primary" onclick="createInvestigationFromStandaloneMarkup(\'' + artifact.id + '\')">New Investigation</button>'
+    + '<button class="btn-sm btn-danger" onclick="deleteStandaloneMarkup(\'' + artifact.id + '\')">Delete</button>'
     + '</div>'
     + '</div>';
+}
+
+async function deleteStandaloneMarkup(artifactId) {
+  var artifact = _standaloneMarkups.find(function(a) { return a.id === artifactId; });
+  var title = artifact && artifact.source_name ? artifact.source_name : 'this standalone markup';
+  if (!confirm('Delete "' + title + '"? This cannot be undone.')) return;
+
+  var result = await API.deleteMarkupArtifact(artifactId);
+  if (result && result.error) {
+    showToast(result.error);
+    return;
+  }
+  _standaloneMarkups = _standaloneMarkups.filter(function(a) { return a.id !== artifactId; });
+  renderInvestigations();
+  showToast('Standalone markup deleted');
 }
 
 function renderInvCard(inv, isCompleted) {

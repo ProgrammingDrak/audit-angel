@@ -126,6 +126,40 @@ function validateMarkupSource(sourceType, sourceContent) {
   return "";
 }
 
+function annotationBounds(ann, x, y, w, h) {
+  const xs = [x];
+  const ys = [y];
+  if (ann.x2 !== undefined) xs.push(Number(ann.x2 || 0) * 100);
+  if (ann.y2 !== undefined) ys.push(Number(ann.y2 || 0) * 100);
+  if (ann.w !== undefined) xs.push(x + Math.max(w, 1));
+  if (ann.h !== undefined) ys.push(y + Math.max(h, 1));
+  if (Array.isArray(ann.points)) {
+    for (const pt of ann.points) {
+      xs.push(Number(pt.x || 0) * 100);
+      ys.push(Number(pt.y || 0) * 100);
+    }
+  }
+  return {
+    left: Math.max(0, Math.min(...xs)),
+    right: Math.min(100, Math.max(...xs)),
+    top: Math.max(0, Math.min(...ys)),
+    bottom: Math.min(100, Math.max(...ys)),
+  };
+}
+
+function renderVisibleTextLabel(ann, id, color, x, y, w, h) {
+  const label = String(ann.text || "").trim();
+  if (!label || ann.type === "text") return "";
+  const bounds = annotationBounds(ann, x, y, w, h);
+  const labelW = Math.max(12, Math.min(36, 5 + label.length * 0.52));
+  const labelH = 4.8;
+  let labelX = Math.min(100 - labelW - 1, Math.max(1, bounds.right + 1.1));
+  let labelY = Math.max(1, bounds.top - labelH - 0.9);
+  if (labelY <= 1.1 && bounds.bottom + labelH + 1 <= 99) labelY = bounds.bottom + 0.9;
+  if (labelX < bounds.right && bounds.left - labelW - 1.1 >= 1) labelX = bounds.left - labelW - 1.1;
+  return `<foreignObject data-ann-id="${id}" class="ann-node" x="${labelX}" y="${Math.min(100 - labelH - 1, labelY)}" width="${labelW}" height="${labelH}"><div xmlns="http://www.w3.org/1999/xhtml" class="ann-label" style="border-color:${color};color:${color};">${escapeHtml(label)}</div></foreignObject>`;
+}
+
 async function createMarkupPinForInvestigation(artifact, invId, userId, body) {
   const pinId = body.pinId || "pin_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
   const maxSort = await db.queryOne(
@@ -179,6 +213,7 @@ function renderAnnotationSvg(annotations, page) {
       const opacity = ann.type === "highlight" ? "0.22" : "1";
       parts.push(`<rect ${common} x="${x}" y="${y}" width="${Math.max(w, 1)}" height="${Math.max(h, 1)}" rx="1" fill="${fill}" fill-opacity="${opacity}" stroke="${color}" stroke-width="${stroke}" />`);
     }
+    parts.push(renderVisibleTextLabel(ann, id, color, x, y, w, h));
   }
   return `<svg class="export-overlay" viewBox="0 0 100 100" preserveAspectRatio="none">
     <defs><marker id="arrowHead" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#DC2626"></path></marker></defs>
@@ -225,7 +260,7 @@ function renderMarkupExport(artifact) {
 body{margin:0;background:#f6f7f9;color:#161E26;font-family:Arial,sans-serif;}
 header{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #ddd;padding:14px 20px;display:flex;align-items:center;gap:12px;}
 h1{font-size:18px;margin:0;flex:1}.tabs{display:flex;gap:8px}.tabs button{border:1px solid #ccd2dc;background:#fff;border-radius:6px;padding:7px 12px;cursor:pointer}.tabs button.active{background:#0075EB;color:#fff;border-color:#0075EB}
-.view{display:none;padding:20px}.view.active{display:block}.doc-wrap{max-width:1100px;margin:0 auto}.doc-page{position:relative;background:#fff;border:1px solid #ddd;margin:0 auto 18px;min-height:620px;box-shadow:0 8px 24px rgba(15,23,42,.08)}.html-frame{width:100%;height:760px;border:0}.source-image{display:block;max-width:100%;margin:0 auto}.pdf-page canvas{display:block;width:100%}.export-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:auto}.ann-node{cursor:pointer}.ann-node.active{filter:drop-shadow(0 0 6px #0075EB)}.ann-text{background:#fff;border:2px solid #DC2626;border-radius:4px;padding:6px;font-size:13px;line-height:1.35;box-sizing:border-box;height:100%;overflow:hidden}
+.view{display:none;padding:20px}.view.active{display:block}.doc-wrap{max-width:1100px;margin:0 auto}.doc-page{position:relative;background:#fff;border:1px solid #ddd;margin:0 auto 18px;min-height:620px;box-shadow:0 8px 24px rgba(15,23,42,.08)}.html-frame{width:100%;height:760px;border:0}.source-image{display:block;max-width:100%;margin:0 auto}.pdf-page canvas{display:block;width:100%}.export-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:auto}.ann-node{cursor:pointer}.ann-node.active{filter:drop-shadow(0 0 6px #0075EB)}.ann-text{background:#fff;border:2px solid #DC2626;border-radius:4px;padding:6px;font-size:13px;line-height:1.35;box-sizing:border-box;height:100%;overflow:hidden}.ann-label{background:rgba(255,255,255,.96);border:.22px solid currentColor;border-radius:.65px;box-shadow:0 .35px 1px rgba(15,23,42,.16);box-sizing:border-box;font-size:1.35px;font-weight:700;height:100%;line-height:1.25;overflow:hidden;padding:.65px 1.05px;text-overflow:ellipsis;white-space:nowrap}
 .summary-list{max-width:860px;margin:0 auto}.summary-item{background:#fff;border:1px solid #ddd;border-left:4px solid #0075EB;border-radius:8px;padding:16px;margin-bottom:12px}.summary-item.active{box-shadow:0 0 0 3px rgba(0,117,235,.18)}.summary-meta{font-size:12px;color:#657184;font-weight:700;text-transform:uppercase;letter-spacing:.04em}.summary-item a{font-size:13px;font-weight:700;color:#0075EB}.empty{text-align:center;color:#657184;padding:40px}
 </style>
 </head>
@@ -835,6 +870,22 @@ app.patch("/api/markup-artifacts/:artifactId", async (req, res) => {
   } catch (err) {
     console.error("[api] Update markup artifact error:", err);
     res.status(500).json({ error: "Failed to update markup artifact" });
+  }
+});
+
+app.delete("/api/markup-artifacts/:artifactId", async (req, res) => {
+  try {
+    const artifact = await canAccessMarkupArtifact(req.params.artifactId, req.session.userId);
+    if (!artifact) return res.status(404).json({ error: "Markup artifact not found" });
+    if (artifact.pin_id || artifact.investigation_id) {
+      return res.status(409).json({ error: "Only standalone markup artifacts can be deleted here" });
+    }
+
+    await db.deleteMarkupArtifact(req.params.artifactId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[api] Delete markup artifact error:", err);
+    res.status(500).json({ error: "Failed to delete markup artifact" });
   }
 });
 
