@@ -88,8 +88,8 @@ async function initDB() {
 
       CREATE TABLE IF NOT EXISTS markup_artifacts (
         id                 TEXT PRIMARY KEY,
-        investigation_id   TEXT NOT NULL REFERENCES investigations(id) ON DELETE CASCADE,
-        pin_id             TEXT NOT NULL UNIQUE REFERENCES pins(id) ON DELETE CASCADE,
+        investigation_id   TEXT REFERENCES investigations(id) ON DELETE CASCADE,
+        pin_id             TEXT UNIQUE REFERENCES pins(id) ON DELETE CASCADE,
         created_by         INTEGER NOT NULL REFERENCES users(id),
         source_type        TEXT NOT NULL,
         source_name        TEXT NOT NULL DEFAULT '',
@@ -142,6 +142,8 @@ async function initDB() {
     // Migrations for existing databases
     await client.query(`
       ALTER TABLE pins ADD COLUMN IF NOT EXISTS in_summary BOOLEAN NOT NULL DEFAULT FALSE;
+      ALTER TABLE markup_artifacts ALTER COLUMN investigation_id DROP NOT NULL;
+      ALTER TABLE markup_artifacts ALTER COLUMN pin_id DROP NOT NULL;
     `).catch(() => {}); // safe to ignore if column already exists
     console.log("[db] Migrations applied");
   } finally {
@@ -463,8 +465,28 @@ async function getMarkupArtifact(id) {
   return queryOne("SELECT * FROM markup_artifacts WHERE id = $1", [id]);
 }
 
+async function getStandaloneMarkupArtifactsForUser(userId) {
+  return queryAll(`
+    SELECT *
+    FROM markup_artifacts
+    WHERE created_by = $1
+      AND investigation_id IS NULL
+      AND pin_id IS NULL
+    ORDER BY created_at DESC
+  `, [userId]);
+}
+
 async function getMarkupArtifactByPin(pinId) {
   return queryOne("SELECT * FROM markup_artifacts WHERE pin_id = $1", [pinId]);
+}
+
+async function attachMarkupArtifact(id, invId, pinId) {
+  return queryOne(`
+    UPDATE markup_artifacts
+    SET investigation_id = $1, pin_id = $2, updated_at = NOW()
+    WHERE id = $3
+    RETURNING *
+  `, [invId, pinId, id]);
 }
 
 async function updateMarkupArtifact(id, fields) {
@@ -561,7 +583,7 @@ module.exports = {
   canAccessInvestigation, isInvestigationOwner,
   getMembers, addMember, removeMember,
   getPinsForInvestigation, createPin, updatePin, updatePinData, deletePin, getPinInvestigationId, reorderPins, movePin, copyPin,
-  createMarkupArtifact, getMarkupArtifact, getMarkupArtifactByPin, updateMarkupArtifact,
+  createMarkupArtifact, getMarkupArtifact, getStandaloneMarkupArtifactsForUser, getMarkupArtifactByPin, attachMarkupArtifact, updateMarkupArtifact,
   getImagesForPin, addImage, deleteImage,
   getDismissedAnomalies, dismissAnomaly, restoreAnomaly,
   getBonusConfig, saveBonusConfig,

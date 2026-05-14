@@ -3,11 +3,17 @@
 // =====================================================
 
 var _investigations = [];
+var _standaloneMarkups = [];
 var _searchQuery = '';
 var _deletedUndo = null;
 
 async function loadInvestigations() {
-  _investigations = await API.getInvestigations();
+  var results = await Promise.all([
+    API.getInvestigations(),
+    API.getStandaloneMarkupArtifacts()
+  ]);
+  _investigations = results[0] || [];
+  _standaloneMarkups = results[1] || [];
   renderInvestigations();
 }
 
@@ -33,7 +39,7 @@ function renderInvestigations() {
 
   // Empty state
   var emptyEl = document.getElementById('emptyState');
-  emptyEl.style.display = _investigations.length === 0 ? '' : 'none';
+  emptyEl.style.display = (_investigations.length === 0 && _standaloneMarkups.length === 0) ? '' : 'none';
 
   // Active list
   var listEl = document.getElementById('invList');
@@ -51,6 +57,52 @@ function renderInvestigations() {
   } else {
     compSection.style.display = 'none';
   }
+
+  renderStandaloneMarkups();
+}
+
+function renderStandaloneMarkups() {
+  var section = document.getElementById('standaloneMarkupSection');
+  var listEl = document.getElementById('standaloneMarkupList');
+  if (!section || !listEl) return;
+
+  var items = _standaloneMarkups.slice();
+  if (_searchQuery) {
+    var q = _searchQuery.toLowerCase();
+    items = items.filter(function(a) {
+      return (a.source_name || 'Markup Artifact').toLowerCase().indexOf(q) !== -1;
+    });
+  }
+
+  section.style.display = items.length ? '' : 'none';
+  document.getElementById('standaloneMarkupCount').textContent = items.length;
+  listEl.innerHTML = items.map(renderStandaloneMarkupCard).join('');
+}
+
+function renderStandaloneMarkupCard(artifact) {
+  var title = artifact.source_name || 'Markup Artifact';
+  var type = (artifact.source_type || 'markup').toUpperCase();
+  var annCount = Array.isArray(artifact.annotations) ? artifact.annotations.length : 0;
+  var dateStr = artifact.created_at ? new Date(artifact.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  var selectId = 'standaloneAttachSelect-' + artifact.id;
+  var invOptions = _investigations.map(function(inv) {
+    return '<option value="' + escHtml(inv.id) + '">' + escHtml(inv.name) + (inv.completed_at ? ' (completed)' : '') + '</option>';
+  }).join('');
+  if (!invOptions) invOptions = '<option value="">No investigations</option>';
+
+  return '<div class="standalone-markup-card" id="standalone-markup-' + escHtml(artifact.id) + '">'
+    + '<div class="pin-markup-icon">&#9998;</div>'
+    + '<div class="standalone-markup-main">'
+    + '<div class="standalone-markup-title">' + escHtml(title) + '</div>'
+    + '<div class="standalone-markup-meta">' + type + ' &middot; ' + annCount + ' annotation' + (annCount === 1 ? '' : 's') + (dateStr ? ' &middot; Created ' + dateStr : '') + '</div>'
+    + '</div>'
+    + '<div class="standalone-markup-actions">'
+    + '<button class="btn-sm btn-light" onclick="openMarkupArtifact(\'' + artifact.id + '\')">Open</button>'
+    + '<select class="standalone-attach-select" id="' + selectId + '"' + (_investigations.length ? '' : ' disabled') + '>' + invOptions + '</select>'
+    + '<button class="btn-sm btn-light" onclick="attachStandaloneMarkupToSelected(\'' + artifact.id + '\')"' + (_investigations.length ? '' : ' disabled') + '>Attach</button>'
+    + '<button class="btn-sm btn-primary" onclick="createInvestigationFromStandaloneMarkup(\'' + artifact.id + '\')">New Investigation</button>'
+    + '</div>'
+    + '</div>';
 }
 
 function renderInvCard(inv, isCompleted) {

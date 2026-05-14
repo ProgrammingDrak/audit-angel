@@ -34,8 +34,17 @@ var API = {
   async createMarkupArtifact(invId, artifact) {
     return this._fetch('/api/investigations/' + invId + '/markup-artifacts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(artifact) });
   },
+  async getStandaloneMarkupArtifacts() {
+    return this._fetch('/api/markup-artifacts?standalone=1');
+  },
+  async createStandaloneMarkupArtifact(artifact) {
+    return this._fetch('/api/markup-artifacts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(artifact) });
+  },
   async getMarkupArtifact(artifactId) {
     return this._fetch('/api/markup-artifacts/' + artifactId);
+  },
+  async attachMarkupArtifact(artifactId, fields) {
+    return this._fetch('/api/markup-artifacts/' + artifactId + '/attach', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields || {}) });
   },
   async updateMarkupArtifact(artifactId, fields) {
     return this._fetch('/api/markup-artifacts/' + artifactId, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) });

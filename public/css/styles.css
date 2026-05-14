@@ -208,6 +208,35 @@ body {
   background: var(--border-light); padding: 2px 8px; border-radius: 10px;
 }
 
+/* ===== STANDALONE MARKUPS ===== */
+.standalone-markup-section {
+  margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--border-light);
+}
+.standalone-markup-heading {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  font-size: 13px; font-weight: 800; color: var(--text-secondary);
+}
+.standalone-markup-list { display: flex; flex-direction: column; gap: 10px; }
+.standalone-markup-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; display: flex; align-items: center; gap: 12px;
+}
+.standalone-markup-main { flex: 1; min-width: 0; }
+.standalone-markup-title {
+  font-size: 13px; font-weight: 800; color: var(--dark); overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.standalone-markup-meta { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.standalone-markup-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.standalone-attach-select, .markup-attach-select {
+  border: 1px solid rgba(0,117,235,0.2); background: var(--blue-light); color: var(--blue);
+  border-radius: 8px; padding: 5px 8px; font-size: 12px; font-weight: 600;
+  font-family: Poppins, sans-serif; max-width: 210px;
+}
+.standalone-attach-select:disabled, .markup-attach-select:disabled {
+  opacity: 0.6; cursor: not-allowed;
+}
+
 /* ===== EMPTY STATE ===== */
 .empty-state {
   text-align: center; padding: 60px 20px;
@@ -588,6 +617,7 @@ body {
 .markup-title { font-size: 15px; font-weight: 800; color: var(--dark); }
 .markup-subtitle { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
 .markup-actions { display: flex; align-items: center; gap: 8px; }
+.markup-attach-actions { display: flex; align-items: center; gap: 6px; }
 .markup-body { min-height: 0; flex: 1; display: grid; grid-template-columns: 112px minmax(0, 1fr) 280px; background: #F6F7F9; }
 .markup-tools, .markup-inspector {
   min-height: 0; overflow-y: auto; background: #fff; border-right: 1px solid var(--border); padding: 10px;
@@ -650,8 +680,13 @@ body {
   .search-input { width: 140px; }
   .inv-card-header { padding: 12px 16px; }
   .modal { margin: 0 8px; }
+  .standalone-markup-card { align-items: flex-start; flex-direction: column; }
+  .standalone-markup-actions { justify-content: flex-start; width: 100%; }
   .pin-image-wrap { max-width: 100%; min-width: 100%; }
   .markup-shell { inset: 6px; }
+  .markup-header { align-items: flex-start; }
+  .markup-actions { align-items: flex-end; flex-wrap: wrap; justify-content: flex-end; }
+  .markup-attach-actions { flex-wrap: wrap; justify-content: flex-end; }
   .markup-body { grid-template-columns: 88px minmax(0, 1fr); }
   .markup-inspector { display: none; }
 }
