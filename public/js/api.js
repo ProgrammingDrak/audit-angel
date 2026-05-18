@@ -49,6 +49,15 @@ var API = {
   async updateMarkupArtifact(artifactId, fields) {
     return this._fetch('/api/markup-artifacts/' + artifactId, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) });
   },
+  async createMarkupShare(artifactId) {
+    return this._fetch('/api/markup-artifacts/' + artifactId + '/share', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+  },
+  async updateMarkupShare(shareId, fields) {
+    return this._fetch('/api/markup-shares/' + shareId, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields || {}) });
+  },
+  async deleteMarkupArtifact(artifactId) {
+    return this._fetch('/api/markup-artifacts/' + artifactId, { method: 'DELETE' });
+  },
   exportMarkupArtifactUrl(artifactId) {
     return '/api/markup-artifacts/' + artifactId + '/export';
   },

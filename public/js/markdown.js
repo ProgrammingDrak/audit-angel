@@ -7,14 +7,14 @@ function renderMarkdown(text) {
   var html = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   // Code blocks
   html = html.replace(/```([\s\S]*?)```/g, function(m, code) {
-    return '<pre style="background:#F3F4F6;border-radius:6px;padding:8px 12px;font-size:12px;font-family:monospace;overflow-x:auto;margin:6px 0;">' + code.trim() + '</pre>';
+    return '<pre style="background:#F3F4F6;border-radius:6px;padding:6px 10px;font-size:11px;font-family:monospace;overflow-x:auto;margin:5px 0;">' + code.trim() + '</pre>';
   });
   // Inline code
   html = html.replace(/`([^`]+)`/g, '<code style="background:#F3F4F6;padding:1px 5px;border-radius:3px;font-size:11px;font-family:monospace;">$1</code>');
   // Headers
-  html = html.replace(/^### (.+)$/gm, '<strong style="font-size:13px;display:block;margin:8px 0 4px;">$1</strong>');
-  html = html.replace(/^## (.+)$/gm, '<strong style="font-size:14px;display:block;margin:8px 0 4px;">$1</strong>');
-  html = html.replace(/^# (.+)$/gm, '<strong style="font-size:15px;display:block;margin:10px 0 4px;">$1</strong>');
+  html = html.replace(/^### (.+)$/gm, '<strong style="font-size:12px;display:block;margin:6px 0 3px;">$1</strong>');
+  html = html.replace(/^## (.+)$/gm, '<strong style="font-size:12.5px;display:block;margin:6px 0 3px;">$1</strong>');
+  html = html.replace(/^# (.+)$/gm, '<strong style="font-size:13px;display:block;margin:7px 0 3px;">$1</strong>');
   // Bold + italic
   html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
   html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -50,8 +50,8 @@ function insertMarkdownSyntax(textareaId, before, after) {
 }
 
 function renderMarkdownToolbar(textareaId) {
-  var s = 'background:none;border:1px solid var(--border);color:var(--text-secondary);padding:2px 7px;border-radius:4px;font-size:12px;cursor:pointer;font-family:Poppins,sans-serif;line-height:1.4;transition:all 0.1s;';
-  return '<div style="display:flex;gap:3px;margin-bottom:4px;flex-wrap:wrap;">'
+  var s = 'background:none;border:1px solid var(--border);color:var(--text-secondary);padding:1px 6px;border-radius:4px;font-size:11px;cursor:pointer;font-family:Poppins,sans-serif;line-height:1.3;transition:all 0.1s;min-height:22px;';
+  return '<div style="display:flex;gap:3px;margin-bottom:3px;flex-wrap:wrap;">'
     + '<button style="' + s + 'font-weight:700;" onclick="event.preventDefault();insertMarkdownSyntax(\'' + textareaId + '\',\'**\',\'**\')" title="Bold">B</button>'
     + '<button style="' + s + 'font-style:italic;" onclick="event.preventDefault();insertMarkdownSyntax(\'' + textareaId + '\',\'*\',\'*\')" title="Italic"><em>I</em></button>'
     + '<button style="' + s + '" onclick="event.preventDefault();insertMarkdownSyntax(\'' + textareaId + '\',\'~~\',\'~~\')" title="Strikethrough"><del>S</del></button>'
