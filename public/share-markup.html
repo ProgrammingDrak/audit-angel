@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Markup Request</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  body { overflow: hidden; }
+  .share-status-banner {
+    display: none; padding: 8px 14px; background: var(--blue-light); color: var(--blue);
+    border-bottom: 1px solid rgba(0,117,235,0.2); font-size: 12px; font-weight: 700;
+  }
+  .share-status-banner.error { display: block; background: var(--red-light); color: var(--red); border-bottom-color: var(--red-border); }
+  .share-status-banner.active { display: block; }
+  .share-identity-panel {
+    position: fixed; inset: 0; z-index: 2600; display: none; align-items: center; justify-content: center;
+    background: rgba(15,23,42,0.42); padding: 18px;
+  }
+  .share-identity-panel.active { display: flex; }
+  .share-identity-card {
+    width: min(420px, 100%); background: #fff; border-radius: 10px; box-shadow: var(--shadow-xl);
+    padding: 18px; border: 1px solid var(--border);
+  }
+  .share-identity-card h2 { font-size: 16px; margin-bottom: 6px; }
+  .share-identity-card p { font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 14px; }
+  .share-identity-card input {
+    width: 100%; border: 1.5px solid var(--border); border-radius: 8px; padding: 9px 10px;
+    font-family: Poppins, sans-serif; margin-bottom: 8px; outline: none;
+  }
+  .share-identity-card input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(0,117,235,0.08); }
+  .share-identity-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div class="markup-overlay active" id="markupOverlay">
+  <div class="markup-shell">
+    <header class="markup-header">
+      <div>
+        <div class="markup-title" id="markupTitle">Markup Request</div>
+        <div class="markup-subtitle" id="markupSubtitle">Loading...</div>
+      </div>
+      <div class="markup-actions">
+        <button class="btn-sm btn-light" id="markupUndoBtn" onclick="undoCurrentMarkup()" title="Undo (Ctrl+Z)" disabled>&#8630;</button>
+        <button class="btn-sm btn-light" id="markupRedoBtn" onclick="redoCurrentMarkup()" title="Redo (Ctrl+Y or Ctrl+Shift+Z)" disabled>&#8631;</button>
+        <button class="btn-sm btn-primary" id="markupSaveBtn" onclick="saveCurrentMarkup()">Save Feedback</button>
+      </div>
+    </header>
+    <div class="share-status-banner" id="shareStatusBanner"></div>
+    <div class="markup-body">
+      <aside class="markup-tools">
+        <button class="markup-tool active" data-tool="select" onclick="setMarkupTool('select')" title="Select or move">Select</button>
+        <button class="markup-tool" data-tool="shape" onclick="setMarkupTool('shape')" title="Draw a shape">Shape</button>
+        <label class="markup-field markup-shape-field">Type
+          <select id="markupShape" onchange="updateMarkupShapeTool()" title="Shape type">
+            <option value="rect">Rectangle</option>
+            <option value="round">Rounded</option>
+            <option value="ellipse">Oval</option>
+            <option value="diamond">Diamond</option>
+            <option value="triangle">Triangle</option>
+          </select>
+        </label>
+        <button class="markup-tool" data-tool="highlight" onclick="setMarkupTool('highlight')" title="Highlight">Highlight</button>
+        <button class="markup-tool" data-tool="arrow" onclick="setMarkupTool('arrow')" title="Arrow">Arrow</button>
+        <button class="markup-tool" data-tool="text" onclick="setMarkupTool('text')" title="Text box">Text</button>
+        <button class="markup-tool" data-tool="pen" onclick="setMarkupTool('pen')" title="Pen">Pen</button>
+        <label class="markup-field">Color <input type="color" id="markupColor" value="#DC2626" onchange="updateSelectedMarkupStyle()"></label>
+        <label class="markup-field">Stroke <input type="range" id="markupStroke" min="1" max="6" value="2" onchange="updateSelectedMarkupStyle()"></label>
+      </aside>
+      <main class="markup-stage-wrap" id="markupStageWrap">
+        <div class="markup-stage" id="markupStage"></div>
+      </main>
+      <aside class="markup-inspector">
+        <div class="markup-inspector-title">Annotations</div>
+        <div class="markup-inspector-list" id="markupAnnotationList"></div>
+        <div class="markup-editor" id="markupEditor" style="display:none;">
+          <label class="field-label">Visible text</label>
+          <input type="text" id="markupTextInput" class="text-input" onfocus="prepareSelectedMarkupEdit('text')" onblur="finishMarkupHistoryEdit()" oninput="updateSelectedMarkupText()" placeholder="Optional label">
+          <label class="field-label">Summary comment</label>
+          <textarea id="markupSummaryInput" class="text-area" onfocus="prepareSelectedMarkupEdit('summary')" onblur="finishMarkupHistoryEdit()" oninput="updateSelectedMarkupSummary()" placeholder="Explain what should change or why this matters..."></textarea>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<div class="share-identity-panel" id="shareIdentityPanel">
+  <div class="share-identity-card">
+    <h2>Add your name?</h2>
+    <p>This is optional. It helps the requester know who left the feedback.</p>
+    <input type="text" id="shareReviewerName" placeholder="Name">
+    <input type="email" id="shareReviewerEmail" placeholder="Email">
+    <div class="share-identity-actions">
+      <button class="btn-sm btn-light" onclick="confirmShareIdentity(false)">Continue without name</button>
+      <button class="btn-sm btn-primary" onclick="confirmShareIdentity(true)">Save Feedback</button>
+    </div>
+  </div>
+</div>
+
+<div id="toastContainer"></div>
+
+<script src="/js/markup.js"></script>
+<script src="/js/share-markup.js"></script>
+</body>
+</html>

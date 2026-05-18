@@ -84,6 +84,8 @@ function renderStandaloneMarkupCard(artifact) {
   var type = (artifact.source_type || 'markup').toUpperCase();
   var annCount = Array.isArray(artifact.annotations) ? artifact.annotations.length : 0;
   var dateStr = artifact.created_at ? new Date(artifact.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  var share = typeof getMarkupShareInfo === 'function' ? getMarkupShareInfo(artifact) : null;
+  var shareBadge = renderStandaloneMarkupShareBadge(share);
   var selectId = 'standaloneAttachSelect-' + artifact.id;
   var invOptions = _investigations.map(function(inv) {
     return '<option value="' + escHtml(inv.id) + '">' + escHtml(inv.name) + (inv.completed_at ? ' (completed)' : '') + '</option>';
@@ -93,17 +95,28 @@ function renderStandaloneMarkupCard(artifact) {
   return '<div class="standalone-markup-card" id="standalone-markup-' + escHtml(artifact.id) + '">'
     + '<div class="pin-markup-icon">&#9998;</div>'
     + '<div class="standalone-markup-main">'
-    + '<div class="standalone-markup-title">' + escHtml(title) + '</div>'
+    + '<div class="standalone-markup-title">' + escHtml(title) + shareBadge + '</div>'
     + '<div class="standalone-markup-meta">' + type + ' &middot; ' + annCount + ' annotation' + (annCount === 1 ? '' : 's') + (dateStr ? ' &middot; Created ' + dateStr : '') + '</div>'
     + '</div>'
     + '<div class="standalone-markup-actions">'
     + '<button class="btn-sm btn-light" onclick="openMarkupArtifact(\'' + artifact.id + '\')">Open</button>'
+    + '<button class="btn-sm btn-light" onclick="shareMarkupArtifactById(\'' + artifact.id + '\')">Share</button>'
+    + (share ? '<button class="btn-sm btn-light" onclick="toggleStandaloneMarkupShareStatus(\'' + artifact.id + '\')">' + (share.status === 'closed' ? 'Reopen' : 'Close') + '</button>' : '')
     + '<select class="standalone-attach-select" id="' + selectId + '"' + (_investigations.length ? '' : ' disabled') + '>' + invOptions + '</select>'
     + '<button class="btn-sm btn-light" onclick="attachStandaloneMarkupToSelected(\'' + artifact.id + '\')"' + (_investigations.length ? '' : ' disabled') + '>Attach</button>'
     + '<button class="btn-sm btn-primary" onclick="createInvestigationFromStandaloneMarkup(\'' + artifact.id + '\')">New Investigation</button>'
     + '<button class="btn-sm btn-danger" onclick="deleteStandaloneMarkup(\'' + artifact.id + '\')">Delete</button>'
     + '</div>'
     + '</div>';
+}
+
+function renderStandaloneMarkupShareBadge(share) {
+  if (!share) return '';
+  var status = share.status === 'closed' ? 'Closed' : 'Shared';
+  var savedAt = share.lastReviewerSavedAt ? new Date(share.lastReviewerSavedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+  var label = status + (savedAt ? ' · saved ' + savedAt : '');
+  var cls = share.status === 'closed' ? ' standalone-share-badge closed' : ' standalone-share-badge';
+  return '<span class="' + cls + '">' + escHtml(label) + '</span>';
 }
 
 async function deleteStandaloneMarkup(artifactId) {

@@ -7,10 +7,15 @@ var _markup = {
   annotations: [],
   pageMeta: { pageCount: 1 },
   tool: 'select',
+  shape: 'rect',
   selectedId: null,
   draft: null,
   moving: null,
-  importMode: 'investigation'
+  importMode: 'investigation',
+  undoStack: [],
+  redoStack: [],
+  historyLimit: 80,
+  historyEditKey: null
 };
 
 function startMarkupImport() {
@@ -89,6 +94,7 @@ async function openMarkupArtifact(artifactId) {
   _markup.selectedId = null;
   _markup.draft = null;
   _markup.moving = null;
+  resetMarkupHistory();
 
   document.getElementById('markupTitle').textContent = artifact.source_name || 'Markup Artifact';
   document.getElementById('markupSubtitle').textContent = (artifact.source_type || '').toUpperCase() + ' · ' + _markup.annotations.length + ' annotations';
@@ -96,6 +102,7 @@ async function openMarkupArtifact(artifactId) {
   document.body.style.overflow = 'hidden';
   setMarkupTool('select');
   renderMarkupAttachActions();
+  renderMarkupShareActions();
   await renderMarkupSource();
   renderMarkupAnnotations();
   renderMarkupInspector();
@@ -107,14 +114,32 @@ function closeMarkupWorkspace() {
   _markup.artifact = null;
   _markup.annotations = [];
   _markup.selectedId = null;
+  resetMarkupHistory();
   renderMarkupAttachActions();
+  renderMarkupShareActions();
 }
 
 function setMarkupTool(tool) {
   _markup.tool = tool;
+  var shapeSelect = document.getElementById('markupShape');
+  if (shapeSelect) _markup.shape = shapeSelect.value || _markup.shape || 'rect';
   document.querySelectorAll('.markup-tool').forEach(function(btn) {
     btn.classList.toggle('active', btn.dataset.tool === tool);
   });
+  updateMarkupSvgInteraction();
+}
+
+function updateMarkupShapeTool() {
+  var shapeSelect = document.getElementById('markupShape');
+  _markup.shape = shapeSelect ? shapeSelect.value : 'rect';
+  var ann = getSelectedMarkup();
+  if (ann && (ann.type === 'shape' || ann.type === 'marker')) {
+    pushMarkupHistory();
+    ann.type = 'shape';
+    ann.shape = _markup.shape;
+    renderMarkupAnnotations();
+  }
+  setMarkupTool('shape');
 }
 
 async function renderMarkupSource() {
@@ -125,7 +150,7 @@ async function renderMarkupSource() {
 
   if (artifact.source_type === 'html') {
     stage.innerHTML = '<div class="markup-page" data-page="0">'
-      + '<iframe sandbox="" srcdoc="' + escHtml(artifact.source_content || '') + '"></iframe>'
+      + '<iframe sandbox="allow-same-origin" scrolling="no" onload="resizeMarkupHtmlFrame(this)" srcdoc="' + escHtml(artifact.source_content || '') + '"></iframe>'
       + markupSvgHtml(0)
       + '</div>';
     _markup.pageMeta.pageCount = 1;
@@ -181,6 +206,40 @@ function bindMarkupSvgs() {
   document.querySelectorAll('.markup-overlay-svg').forEach(function(svg) {
     svg.onpointerdown = onMarkupPointerDown;
   });
+  updateMarkupSvgInteraction();
+}
+
+function updateMarkupSvgInteraction() {
+  document.querySelectorAll('.markup-overlay-svg').forEach(function(svg) {
+    svg.classList.toggle('markup-drawing-surface', _markup.tool !== 'select');
+  });
+}
+
+function resizeMarkupHtmlFrame(iframe) {
+  if (!iframe) return;
+  var resize = function() {
+    try {
+      var doc = iframe.contentDocument || (iframe.contentWindow && iframe.contentWindow.document);
+      if (!doc) return;
+      var body = doc.body;
+      var root = doc.documentElement;
+      var height = Math.max(
+        body ? body.scrollHeight : 0,
+        body ? body.offsetHeight : 0,
+        root ? root.scrollHeight : 0,
+        root ? root.offsetHeight : 0,
+        760
+      );
+      iframe.style.height = height + 'px';
+      if (iframe.parentElement) iframe.parentElement.style.minHeight = height + 'px';
+    } catch (err) {
+      iframe.style.height = '1200px';
+      if (iframe.parentElement) iframe.parentElement.style.minHeight = '1200px';
+    }
+  };
+  resize();
+  setTimeout(resize, 100);
+  setTimeout(resize, 500);
 }
 
 function svgPoint(evt, svg) {
@@ -199,7 +258,8 @@ function onMarkupPointerDown(evt) {
     if (_markup.tool === 'select') {
       _markup.moving = {
         start: svgPoint(evt, svg),
-        original: JSON.parse(JSON.stringify(getSelectedMarkup()))
+        original: JSON.parse(JSON.stringify(getSelectedMarkup())),
+        historyRecorded: false
       };
       svg.setPointerCapture(evt.pointerId);
       svg.onpointermove = onMarkupPointerMove;
@@ -216,22 +276,27 @@ function onMarkupPointerDown(evt) {
 
   var page = Number(svg.dataset.page || 0);
   var p = svgPoint(evt, svg);
+  var color = document.getElementById('markupColor').value || '#DC2626';
+  var strokeWidth = Number(document.getElementById('markupStroke').value || 2);
+  var annotationType = _markup.tool === 'shape' ? 'shape' : _markup.tool;
   var ann = {
     id: 'ann_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-    type: _markup.tool,
+    type: annotationType,
+    shape: annotationType === 'shape' ? (_markup.shape || 'rect') : undefined,
     page: page,
     x: p.x,
     y: p.y,
-    w: _markup.tool === 'text' ? 0.22 : 0.01,
-    h: _markup.tool === 'text' ? 0.08 : 0.01,
+    w: _markup.tool === 'text' ? 0.14 : 0.01,
+    h: _markup.tool === 'text' ? 0.045 : 0.01,
     x2: p.x,
     y2: p.y,
     points: _markup.tool === 'pen' ? [p] : [],
     text: _markup.tool === 'text' ? 'Text note' : '',
     summary: '',
-    color: document.getElementById('markupColor').value || '#DC2626',
-    strokeWidth: Number(document.getElementById('markupStroke').value || 3)
+    color: color,
+    strokeWidth: strokeWidth
   };
+  pushMarkupHistory();
   _markup.annotations.push(ann);
   _markup.draft = { id: ann.id, start: p };
   selectMarkupAnnotation(ann.id);
@@ -246,6 +311,10 @@ function onMarkupPointerMove(evt) {
   var svg = evt.currentTarget;
   var p = svgPoint(evt, svg);
   if (_markup.moving) {
+    if (!_markup.moving.historyRecorded) {
+      pushMarkupHistory();
+      _markup.moving.historyRecorded = true;
+    }
     moveSelectedMarkup(p);
     renderMarkupAnnotations();
     return;
@@ -271,6 +340,7 @@ function onMarkupPointerUp(evt) {
   var svg = evt.currentTarget;
   _markup.draft = null;
   _markup.moving = null;
+  _markup.historyEditKey = null;
   svg.onpointermove = null;
   svg.onpointerup = null;
   renderMarkupInspector();
@@ -307,6 +377,7 @@ function renderMarkupAnnotations() {
   });
   document.getElementById('markupSubtitle').textContent = (_markup.artifact.source_type || '').toUpperCase() + ' · ' + _markup.annotations.length + ' annotations';
   renderMarkupAttachActions();
+  renderMarkupShareActions();
   renderMarkupInspector();
 }
 
@@ -315,11 +386,15 @@ function createMarkupSvgNode(ann) {
   var group = document.createElementNS(ns, 'g');
   var node;
   var color = ann.color || '#DC2626';
-  var stroke = Math.max(0.25, Number(ann.strokeWidth || 3) / 2);
+  var stroke = Math.max(1, Number(ann.strokeWidth || 2));
+  var x = (ann.x || 0) * 100;
+  var y = (ann.y || 0) * 100;
+  var w = Math.max((ann.w || 0.01) * 100, 0.7);
+  var h = Math.max((ann.h || 0.01) * 100, 0.7);
   if (ann.type === 'arrow') {
     node = document.createElementNS(ns, 'line');
-    node.setAttribute('x1', (ann.x || 0) * 100);
-    node.setAttribute('y1', (ann.y || 0) * 100);
+    node.setAttribute('x1', x);
+    node.setAttribute('y1', y);
     node.setAttribute('x2', (ann.x2 || ann.x || 0) * 100);
     node.setAttribute('y2', (ann.y2 || ann.y || 0) * 100);
     node.setAttribute('marker-end', 'url(#markupArrowHead)');
@@ -334,8 +409,8 @@ function createMarkupSvgNode(ann) {
     node.setAttribute('stroke-linejoin', 'round');
   } else if (ann.type === 'text') {
     node = document.createElementNS(ns, 'foreignObject');
-    node.setAttribute('x', (ann.x || 0) * 100);
-    node.setAttribute('y', (ann.y || 0) * 100);
+    node.setAttribute('x', x);
+    node.setAttribute('y', y);
     node.setAttribute('width', Math.max((ann.w || 0.2) * 100, 10));
     node.setAttribute('height', Math.max((ann.h || 0.08) * 100, 6));
     var div = document.createElement('div');
@@ -343,12 +418,15 @@ function createMarkupSvgNode(ann) {
     div.style.color = color;
     div.textContent = ann.text || ann.summary || 'Text note';
     node.appendChild(div);
+  } else if (ann.type === 'shape' || ann.type === 'marker') {
+    node = createShapeNode(ns, ann.shape || 'rect', x, y, w, h);
+    node.setAttribute('fill', 'none');
   } else {
     node = document.createElementNS(ns, 'rect');
-    node.setAttribute('x', (ann.x || 0) * 100);
-    node.setAttribute('y', (ann.y || 0) * 100);
-    node.setAttribute('width', Math.max((ann.w || 0.01) * 100, 0.7));
-    node.setAttribute('height', Math.max((ann.h || 0.01) * 100, 0.7));
+    node.setAttribute('x', x);
+    node.setAttribute('y', y);
+    node.setAttribute('width', w);
+    node.setAttribute('height', h);
     node.setAttribute('rx', 1);
     if (ann.type === 'highlight') {
       node.setAttribute('fill', color);
@@ -359,6 +437,7 @@ function createMarkupSvgNode(ann) {
   }
   node.setAttribute('stroke', color);
   node.setAttribute('stroke-width', stroke);
+  if (ann.type !== 'text') node.setAttribute('vector-effect', 'non-scaling-stroke');
   group.setAttribute('class', 'markup-ann' + (ann.id === _markup.selectedId ? ' selected' : ''));
   group.setAttribute('data-ann-id', ann.id);
   node.style.color = color;
@@ -415,6 +494,32 @@ function getMarkupAnnotationBounds(ann) {
   };
 }
 
+function createShapeNode(ns, shape, x, y, w, h) {
+  if (shape === 'ellipse') {
+    var ellipse = document.createElementNS(ns, 'ellipse');
+    ellipse.setAttribute('cx', x + w / 2);
+    ellipse.setAttribute('cy', y + h / 2);
+    ellipse.setAttribute('rx', w / 2);
+    ellipse.setAttribute('ry', h / 2);
+    return ellipse;
+  }
+  if (shape === 'diamond' || shape === 'triangle') {
+    var polygon = document.createElementNS(ns, 'polygon');
+    var points = shape === 'diamond'
+      ? [[x + w / 2, y], [x + w, y + h / 2], [x + w / 2, y + h], [x, y + h]]
+      : [[x + w / 2, y], [x + w, y + h], [x, y + h]];
+    polygon.setAttribute('points', points.map(function(p) { return p[0] + ',' + p[1]; }).join(' '));
+    return polygon;
+  }
+  var rect = document.createElementNS(ns, 'rect');
+  rect.setAttribute('x', x);
+  rect.setAttribute('y', y);
+  rect.setAttribute('width', w);
+  rect.setAttribute('height', h);
+  rect.setAttribute('rx', shape === 'round' ? 2 : 0.5);
+  return rect;
+}
+
 function renderMarkupInspector() {
   var list = document.getElementById('markupAnnotationList');
   if (!_markup.annotations.length) {
@@ -423,8 +528,9 @@ function renderMarkupInspector() {
     list.innerHTML = _markup.annotations.map(function(ann, idx) {
       var active = ann.id === _markup.selectedId ? ' active' : '';
       var label = ann.summary || ann.text || '(No summary yet)';
+      var typeLabel = getMarkupAnnotationLabel(ann);
       return '<div class="markup-ann-item' + active + '" onclick="selectMarkupAnnotation(\'' + ann.id + '\',true)">'
-        + '<div class="markup-ann-item-meta">' + (idx + 1) + ' · ' + escHtml(ann.type) + ' · Page ' + (Number(ann.page || 0) + 1) + '</div>'
+        + '<div class="markup-ann-item-meta">' + (idx + 1) + ' · ' + escHtml(typeLabel) + ' · Page ' + (Number(ann.page || 0) + 1) + '</div>'
         + '<div class="markup-ann-item-text">' + escHtml(label) + '</div>'
         + '</div>';
     }).join('');
@@ -436,11 +542,27 @@ function renderMarkupInspector() {
     document.getElementById('markupTextInput').value = ann.text || '';
     document.getElementById('markupSummaryInput').value = ann.summary || '';
     document.getElementById('markupColor').value = ann.color || '#DC2626';
-    document.getElementById('markupStroke').value = ann.strokeWidth || 3;
+    document.getElementById('markupStroke').value = ann.strokeWidth || 2;
+    var shapeSelect = document.getElementById('markupShape');
+    if (shapeSelect && (ann.type === 'shape' || ann.type === 'marker')) shapeSelect.value = ann.shape || 'rect';
   }
 }
 
+function getMarkupAnnotationLabel(ann) {
+  if (!ann) return 'Annotation';
+  if (ann.type !== 'shape' && ann.type !== 'marker') return ann.type || 'Annotation';
+  var names = {
+    rect: 'Rectangle',
+    round: 'Rounded',
+    ellipse: 'Oval',
+    diamond: 'Diamond',
+    triangle: 'Triangle'
+  };
+  return names[ann.shape || 'rect'] || 'Shape';
+}
+
 function selectMarkupAnnotation(id, scrollToIt) {
+  _markup.historyEditKey = null;
   _markup.selectedId = id;
   renderMarkupAnnotations();
   if (scrollToIt && id) {
@@ -470,16 +592,105 @@ function updateSelectedMarkupSummary() {
 function updateSelectedMarkupStyle() {
   var ann = getSelectedMarkup();
   if (!ann) return;
+  pushMarkupHistory();
   ann.color = document.getElementById('markupColor').value;
-  ann.strokeWidth = Number(document.getElementById('markupStroke').value || 3);
+  ann.strokeWidth = Number(document.getElementById('markupStroke').value || 2);
   renderMarkupAnnotations();
 }
 
 function deleteSelectedMarkup() {
   if (!_markup.selectedId) return;
+  pushMarkupHistory();
   _markup.annotations = _markup.annotations.filter(function(ann) { return ann.id !== _markup.selectedId; });
   _markup.selectedId = null;
   renderMarkupAnnotations();
+}
+
+function prepareSelectedMarkupEdit(field) {
+  var ann = getSelectedMarkup();
+  if (!ann) return;
+  var key = field + ':' + ann.id;
+  if (_markup.historyEditKey === key) return;
+  pushMarkupHistory();
+  _markup.historyEditKey = key;
+}
+
+function finishMarkupHistoryEdit() {
+  _markup.historyEditKey = null;
+}
+
+function cloneMarkupValue(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function getMarkupHistorySnapshot() {
+  return {
+    annotations: cloneMarkupValue(_markup.annotations || []),
+    pageMeta: cloneMarkupValue(_markup.pageMeta || { pageCount: 1 }),
+    selectedId: _markup.selectedId,
+    shape: _markup.shape || 'rect'
+  };
+}
+
+function sameMarkupHistorySnapshot(a, b) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function resetMarkupHistory() {
+  _markup.undoStack = [];
+  _markup.redoStack = [];
+  _markup.historyEditKey = null;
+  updateMarkupHistoryControls();
+}
+
+function pushMarkupHistory() {
+  if (!_markup.artifact) return;
+  var snapshot = getMarkupHistorySnapshot();
+  var last = _markup.undoStack[_markup.undoStack.length - 1];
+  if (last && sameMarkupHistorySnapshot(last, snapshot)) return;
+  _markup.undoStack.push(snapshot);
+  if (_markup.undoStack.length > _markup.historyLimit) _markup.undoStack.shift();
+  _markup.redoStack = [];
+  updateMarkupHistoryControls();
+}
+
+function restoreMarkupHistorySnapshot(snapshot) {
+  _markup.annotations = cloneMarkupValue(snapshot.annotations || []);
+  _markup.pageMeta = cloneMarkupValue(snapshot.pageMeta || { pageCount: 1 });
+  _markup.selectedId = snapshot.selectedId || null;
+  _markup.shape = snapshot.shape || _markup.shape || 'rect';
+  _markup.draft = null;
+  _markup.moving = null;
+  _markup.historyEditKey = null;
+  renderMarkupAnnotations();
+  updateMarkupHistoryControls();
+}
+
+function undoCurrentMarkup() {
+  if (!_markup.undoStack.length) return;
+  var current = getMarkupHistorySnapshot();
+  var previous = _markup.undoStack.pop();
+  if (!sameMarkupHistorySnapshot(current, previous)) {
+    _markup.redoStack.push(current);
+  }
+  restoreMarkupHistorySnapshot(previous);
+}
+
+function redoCurrentMarkup() {
+  if (!_markup.redoStack.length) return;
+  var current = getMarkupHistorySnapshot();
+  var next = _markup.redoStack.pop();
+  if (!sameMarkupHistorySnapshot(current, next)) {
+    _markup.undoStack.push(current);
+  }
+  restoreMarkupHistorySnapshot(next);
+}
+
+function updateMarkupHistoryControls() {
+  var undoBtn = document.getElementById('markupUndoBtn');
+  var redoBtn = document.getElementById('markupRedoBtn');
+  if (undoBtn) undoBtn.disabled = !_markup.undoStack.length;
+  if (redoBtn) redoBtn.disabled = !_markup.redoStack.length;
 }
 
 async function saveCurrentMarkup() {
@@ -569,6 +780,120 @@ function renderMarkupAttachActions() {
   if (!options) options = '<option value="">No investigations</option>';
   select.innerHTML = options;
   select.disabled = _investigations.length === 0;
+}
+
+function getMarkupShareInfo(artifact) {
+  if (!artifact) return null;
+  if (artifact.share) return artifact.share;
+  if (!artifact.share_id) return null;
+  return {
+    id: artifact.share_id,
+    status: artifact.share_status || 'open',
+    reviewerName: artifact.share_reviewer_name || '',
+    reviewerEmail: artifact.share_reviewer_email || '',
+    lastReviewerSeenAt: artifact.share_last_reviewer_seen_at || null,
+    lastReviewerSavedAt: artifact.share_last_reviewer_saved_at || null,
+    createdAt: artifact.share_created_at || null,
+    closedAt: artifact.share_closed_at || null
+  };
+}
+
+function applyMarkupShareInfo(artifact, share) {
+  if (!artifact || !share) return;
+  artifact.share = share;
+  artifact.share_id = share.id;
+  artifact.share_status = share.status;
+  artifact.share_reviewer_name = share.reviewerName || '';
+  artifact.share_reviewer_email = share.reviewerEmail || '';
+  artifact.share_last_reviewer_seen_at = share.lastReviewerSeenAt || null;
+  artifact.share_last_reviewer_saved_at = share.lastReviewerSavedAt || null;
+  artifact.share_created_at = share.createdAt || null;
+  artifact.share_closed_at = share.closedAt || null;
+}
+
+function renderMarkupShareActions() {
+  var shareBtn = document.getElementById('markupShareBtn');
+  var statusBtn = document.getElementById('markupShareStatusBtn');
+  if (!shareBtn && !statusBtn) return;
+  var artifact = _markup.artifact;
+  if (shareBtn) shareBtn.style.display = artifact ? '' : 'none';
+  if (!statusBtn) return;
+  var share = getMarkupShareInfo(artifact);
+  statusBtn.style.display = share ? '' : 'none';
+  if (share) {
+    statusBtn.textContent = share.status === 'closed' ? 'Reopen Request' : 'Close Request';
+    statusBtn.classList.toggle('btn-danger', share.status !== 'closed');
+    statusBtn.classList.toggle('btn-light', share.status === 'closed');
+  }
+}
+
+async function copyMarkupShareText(message) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    try {
+      await navigator.clipboard.writeText(message);
+      return true;
+    } catch (err) {}
+  }
+  prompt('Copy this share message:', message);
+  return false;
+}
+
+async function shareMarkupArtifactById(artifactId) {
+  var result = await API.createMarkupShare(artifactId);
+  if (!result || result.error) {
+    showToast((result && result.error) || 'Could not create share link');
+    return;
+  }
+  if (_markup.artifact && _markup.artifact.id === artifactId) {
+    applyMarkupShareInfo(_markup.artifact, result.share);
+    renderMarkupShareActions();
+  }
+  if (typeof _standaloneMarkups !== 'undefined') {
+    var artifact = _standaloneMarkups.find(function(a) { return a.id === artifactId; });
+    applyMarkupShareInfo(artifact, result.share);
+    if (typeof renderInvestigations === 'function') renderInvestigations();
+  }
+  await copyMarkupShareText(result.message || result.shareUrl);
+  showToast('Share link copied');
+}
+
+async function shareCurrentMarkup() {
+  if (!_markup.artifact) return;
+  await shareMarkupArtifactById(_markup.artifact.id);
+}
+
+async function updateMarkupShareStatusForArtifact(artifactId, shareId, status) {
+  var result = await API.updateMarkupShare(shareId, { status: status });
+  if (!result || result.error) {
+    showToast((result && result.error) || 'Could not update share request');
+    return;
+  }
+  if (_markup.artifact && _markup.artifact.id === artifactId) {
+    applyMarkupShareInfo(_markup.artifact, result.share);
+    renderMarkupShareActions();
+  }
+  if (typeof _standaloneMarkups !== 'undefined') {
+    var artifact = _standaloneMarkups.find(function(a) { return a.id === artifactId; });
+    applyMarkupShareInfo(artifact, result.share);
+    if (typeof renderInvestigations === 'function') renderInvestigations();
+  }
+  showToast(status === 'closed' ? 'Markup request closed' : 'Markup request reopened');
+}
+
+async function toggleCurrentMarkupShareStatus() {
+  var artifact = _markup.artifact;
+  var share = getMarkupShareInfo(artifact);
+  if (!artifact || !share) return;
+  var nextStatus = share.status === 'closed' ? 'open' : 'closed';
+  await updateMarkupShareStatusForArtifact(artifact.id, share.id, nextStatus);
+}
+
+async function toggleStandaloneMarkupShareStatus(artifactId) {
+  var artifact = _standaloneMarkups.find(function(a) { return a.id === artifactId; });
+  var share = getMarkupShareInfo(artifact);
+  if (!artifact || !share) return;
+  var nextStatus = share.status === 'closed' ? 'open' : 'closed';
+  await updateMarkupShareStatusForArtifact(artifact.id, share.id, nextStatus);
 }
 
 async function attachSelectedMarkupInvestigation() {

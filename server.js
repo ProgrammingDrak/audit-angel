@@ -43,6 +43,23 @@ app.use(session({
   },
 }));
 
+function makeMarkupShareToken(shareId) {
+  const signature = crypto.createHmac("sha256", sessionSecret).update(shareId).digest("base64url");
+  return `${shareId}.${signature}`;
+}
+
+function hashMarkupShareToken(token) {
+  return crypto.createHash("sha256").update(String(token || "")).digest("hex");
+}
+
+function markupShareUrl(req, token) {
+  return `${req.protocol}://${req.get("host")}/share/markup/${encodeURIComponent(token)}`;
+}
+
+function markupShareMessage(url) {
+  return `Hey, can you mark up this document for me? ${url}`;
+}
+
 // ── SSE Client Tracking ──
 const sseClients = new Set(); // { res, userId }
 
@@ -93,7 +110,42 @@ function normalizeMarkupArtifact(row) {
   }
   row.annotations = Array.isArray(row.annotations) ? row.annotations : [];
   row.page_meta = row.page_meta && typeof row.page_meta === "object" ? row.page_meta : {};
+  if (row.share_id) {
+    row.share = {
+      id: row.share_id,
+      status: row.share_status || "open",
+      reviewerName: row.share_reviewer_name || "",
+      reviewerEmail: row.share_reviewer_email || "",
+      lastReviewerSeenAt: row.share_last_reviewer_seen_at || null,
+      lastReviewerSavedAt: row.share_last_reviewer_saved_at || null,
+      createdAt: row.share_created_at || null,
+      closedAt: row.share_closed_at || null,
+    };
+  }
   return row;
+}
+
+function normalizeMarkupShare(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    artifactId: row.artifact_id,
+    ownerId: row.owner_id,
+    status: row.status,
+    reviewerName: row.reviewer_name || "",
+    reviewerEmail: row.reviewer_email || "",
+    lastReviewerSeenAt: row.last_reviewer_seen_at || null,
+    lastReviewerSavedAt: row.last_reviewer_saved_at || null,
+    createdAt: row.created_at || null,
+    closedAt: row.closed_at || null,
+  };
+}
+
+function publicMarkupSharePayload(share, artifact) {
+  return {
+    share: normalizeMarkupShare(share),
+    artifact: normalizeMarkupArtifact(artifact),
+  };
 }
 
 async function canAccessMarkupArtifact(artifactId, userId) {
@@ -124,6 +176,21 @@ function validateMarkupSource(sourceType, sourceContent) {
     return "Markup source is required and must be 5 MB or smaller";
   }
   return "";
+}
+
+function renderShapeSvg(shape, common, x, y, w, h, color, stroke) {
+  const shared = `${common} fill="none" stroke="${color}" stroke-width="${stroke}" vector-effect="non-scaling-stroke"`;
+  if (shape === "ellipse") {
+    return `<ellipse ${shared} cx="${x + w / 2}" cy="${y + h / 2}" rx="${w / 2}" ry="${h / 2}" />`;
+  }
+  if (shape === "diamond" || shape === "triangle") {
+    const points = shape === "diamond"
+      ? [[x + w / 2, y], [x + w, y + h / 2], [x + w / 2, y + h], [x, y + h]]
+      : [[x + w / 2, y], [x + w, y + h], [x, y + h]];
+    return `<polygon ${shared} points="${points.map((pt) => pt.join(",")).join(" ")}" />`;
+  }
+  const rx = shape === "round" ? 2 : 0.5;
+  return `<rect ${shared} x="${x}" y="${y}" width="${Math.max(w, 1)}" height="${Math.max(h, 1)}" rx="${rx}" />`;
 }
 
 function annotationBounds(ann, x, y, w, h) {
@@ -193,7 +260,7 @@ function renderAnnotationSvg(annotations, page) {
   for (const ann of pageAnnotations) {
     const id = escapeHtml(ann.id || "");
     const color = escapeHtml(ann.color || "#DC2626");
-    const stroke = Math.max(1, Number(ann.strokeWidth || 3));
+    const stroke = Math.max(1, Number(ann.strokeWidth || 2));
     const x = Number(ann.x || 0) * 100;
     const y = Number(ann.y || 0) * 100;
     const w = Number(ann.w || 0.18) * 100;
@@ -202,16 +269,18 @@ function renderAnnotationSvg(annotations, page) {
     if (ann.type === "arrow") {
       const x2 = Number(ann.x2 || ann.x || 0) * 100;
       const y2 = Number(ann.y2 || ann.y || 0) * 100;
-      parts.push(`<line ${common} x1="${x}" y1="${y}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="${stroke}" marker-end="url(#arrowHead)" />`);
+      parts.push(`<line ${common} x1="${x}" y1="${y}" x2="${x2}" y2="${y2}" stroke="${color}" stroke-width="${stroke}" vector-effect="non-scaling-stroke" marker-end="url(#arrowHead)" />`);
     } else if (ann.type === "pen" && Array.isArray(ann.points) && ann.points.length) {
       const d = ann.points.map((pt, idx) => `${idx ? "L" : "M"} ${Number(pt.x || 0) * 100} ${Number(pt.y || 0) * 100}`).join(" ");
-      parts.push(`<path ${common} d="${escapeHtml(d)}" fill="none" stroke="${color}" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round" />`);
+      parts.push(`<path ${common} d="${escapeHtml(d)}" fill="none" stroke="${color}" stroke-width="${stroke}" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" />`);
     } else if (ann.type === "text") {
       parts.push(`<foreignObject ${common} x="${x}" y="${y}" width="${Math.max(w, 14)}" height="${Math.max(h, 7)}"><div xmlns="http://www.w3.org/1999/xhtml" class="ann-text" style="border-color:${color};">${escapeHtml(ann.text || ann.summary || "Note")}</div></foreignObject>`);
+    } else if (ann.type === "shape" || ann.type === "marker") {
+      parts.push(renderShapeSvg(ann.shape || "rect", common, x, y, w, h, color, stroke));
     } else {
       const fill = ann.type === "highlight" ? color : "none";
       const opacity = ann.type === "highlight" ? "0.22" : "1";
-      parts.push(`<rect ${common} x="${x}" y="${y}" width="${Math.max(w, 1)}" height="${Math.max(h, 1)}" rx="1" fill="${fill}" fill-opacity="${opacity}" stroke="${color}" stroke-width="${stroke}" />`);
+      parts.push(`<rect ${common} x="${x}" y="${y}" width="${Math.max(w, 1)}" height="${Math.max(h, 1)}" rx="1" fill="${fill}" fill-opacity="${opacity}" stroke="${color}" stroke-width="${stroke}" vector-effect="non-scaling-stroke" />`);
     }
     parts.push(renderVisibleTextLabel(ann, id, color, x, y, w, h));
   }
@@ -229,7 +298,7 @@ function renderMarkupExport(artifact) {
   let documentHtml = "";
 
   if (artifact.source_type === "html") {
-    documentHtml += `<section class="doc-page" id="page-0"><iframe class="html-frame" sandbox="" srcdoc="${escapeHtml(artifact.source_content)}"></iframe>${renderAnnotationSvg(annotations, 0)}</section>`;
+    documentHtml += `<section class="doc-page" id="page-0"><iframe class="html-frame" sandbox="allow-same-origin" scrolling="no" onload="resizeHtmlFrame(this)" srcdoc="${escapeHtml(artifact.source_content)}"></iframe>${renderAnnotationSvg(annotations, 0)}</section>`;
   } else if (artifact.source_type === "image") {
     documentHtml += `<section class="doc-page" id="page-0" style="min-height:0;"><img class="source-image" src="${escapeHtml(artifact.source_content)}" alt="${escapeHtml(title)}">${renderAnnotationSvg(annotations, 0)}</section>`;
   } else {
@@ -260,7 +329,7 @@ function renderMarkupExport(artifact) {
 body{margin:0;background:#f6f7f9;color:#161E26;font-family:Arial,sans-serif;}
 header{position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid #ddd;padding:14px 20px;display:flex;align-items:center;gap:12px;}
 h1{font-size:18px;margin:0;flex:1}.tabs{display:flex;gap:8px}.tabs button{border:1px solid #ccd2dc;background:#fff;border-radius:6px;padding:7px 12px;cursor:pointer}.tabs button.active{background:#0075EB;color:#fff;border-color:#0075EB}
-.view{display:none;padding:20px}.view.active{display:block}.doc-wrap{max-width:1100px;margin:0 auto}.doc-page{position:relative;background:#fff;border:1px solid #ddd;margin:0 auto 18px;min-height:620px;box-shadow:0 8px 24px rgba(15,23,42,.08)}.html-frame{width:100%;height:760px;border:0}.source-image{display:block;max-width:100%;margin:0 auto}.pdf-page canvas{display:block;width:100%}.export-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:auto}.ann-node{cursor:pointer}.ann-node.active{filter:drop-shadow(0 0 6px #0075EB)}.ann-text{background:#fff;border:2px solid #DC2626;border-radius:4px;padding:6px;font-size:13px;line-height:1.35;box-sizing:border-box;height:100%;overflow:hidden}.ann-label{background:rgba(255,255,255,.96);border:.22px solid currentColor;border-radius:.65px;box-shadow:0 .35px 1px rgba(15,23,42,.16);box-sizing:border-box;font-size:1.35px;font-weight:700;height:100%;line-height:1.25;overflow:hidden;padding:.65px 1.05px;text-overflow:ellipsis;white-space:nowrap}
+.view{display:none;padding:20px}.view.active{display:block}.doc-wrap{max-width:1100px;margin:0 auto}.doc-page{position:relative;background:#fff;border:1px solid #ddd;margin:0 auto 18px;min-height:620px;box-shadow:0 8px 24px rgba(15,23,42,.08)}.html-frame{width:100%;height:760px;border:0}.source-image{display:block;max-width:100%;margin:0 auto}.pdf-page canvas{display:block;width:100%}.export-overlay{position:absolute;inset:0;width:100%;height:100%;pointer-events:auto}.ann-node{cursor:pointer}.ann-node.active{filter:drop-shadow(0 0 6px #0075EB)}.ann-text{background:#fff;border:.25px solid #DC2626;border-radius:.5px;padding:.75px;font-size:1.55px;line-height:1.35;box-sizing:border-box;height:100%;overflow:hidden}.ann-label{background:rgba(255,255,255,.96);border:.22px solid currentColor;border-radius:.65px;box-shadow:0 .35px 1px rgba(15,23,42,.16);box-sizing:border-box;font-size:1.35px;font-weight:700;height:100%;line-height:1.25;overflow:hidden;padding:.65px 1.05px;text-overflow:ellipsis;white-space:nowrap}
 .summary-list{max-width:860px;margin:0 auto}.summary-item{background:#fff;border:1px solid #ddd;border-left:4px solid #0075EB;border-radius:8px;padding:16px;margin-bottom:12px}.summary-item.active{box-shadow:0 0 0 3px rgba(0,117,235,.18)}.summary-meta{font-size:12px;color:#657184;font-weight:700;text-transform:uppercase;letter-spacing:.04em}.summary-item a{font-size:13px;font-weight:700;color:#0075EB}.empty{text-align:center;color:#657184;padding:40px}
 </style>
 </head>
@@ -274,6 +343,7 @@ function switchTab(tab){document.getElementById('viewDoc').classList.toggle('act
 function clearActive(){document.querySelectorAll('.active.ann-node,.summary-item.active').forEach(function(el){el.classList.remove('active');});}
 function selectAnnotation(id){clearActive();var ann=document.getElementById('ann_'+id);var sum=document.getElementById('summary_'+id);if(ann)ann.classList.add('active');if(sum)sum.classList.add('active');}
 function viewAnnotation(id,page){switchTab('doc');setTimeout(function(){selectAnnotation(id);var ann=document.getElementById('ann_'+id)||document.getElementById('page_'+page);if(ann)ann.scrollIntoView({behavior:'smooth',block:'center'});},50);}
+function resizeHtmlFrame(iframe){if(!iframe)return;var resize=function(){try{var doc=iframe.contentDocument||(iframe.contentWindow&&iframe.contentWindow.document);if(!doc)return;var body=doc.body;var root=doc.documentElement;var height=Math.max(body?body.scrollHeight:0,body?body.offsetHeight:0,root?root.scrollHeight:0,root?root.offsetHeight:0,760);iframe.style.height=height+'px';if(iframe.parentElement)iframe.parentElement.style.minHeight=height+'px';}catch(err){iframe.style.height='1200px';if(iframe.parentElement)iframe.parentElement.style.minHeight='1200px';}};resize();setTimeout(resize,100);setTimeout(resize,500);}
 document.addEventListener('click',function(e){var ann=e.target.closest&&e.target.closest('.ann-node');if(ann){var id=ann.getAttribute('data-ann-id');selectAnnotation(id);var sum=document.getElementById('summary_'+id);if(sum){setTimeout(function(){switchTab('summary');sum.scrollIntoView({behavior:'smooth',block:'center'});},150);}}});
 if(artifact.sourceType==='pdf'&&window.pdfjsLib){pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';pdfjsLib.getDocument(artifact.sourceContent).promise.then(function(pdf){document.querySelectorAll('.pdf-page').forEach(function(pageEl){var n=Number(pageEl.dataset.page);pdf.getPage(n).then(function(page){var viewport=page.getViewport({scale:1.4});var canvas=pageEl.querySelector('canvas');var ctx=canvas.getContext('2d');canvas.width=viewport.width;canvas.height=viewport.height;pageEl.style.width=viewport.width+'px';pageEl.style.minHeight=viewport.height+'px';page.render({canvasContext:ctx,viewport:viewport});});});});}
 </script>
@@ -295,6 +365,73 @@ app.get("/login", (req, res) => {
 
 app.get("/api/health", (req, res) => {
   res.json({ ok: true, service: "audit-angel", timestamp: new Date().toISOString() });
+});
+
+app.get("/share/markup/:token", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "share-markup.html"));
+});
+
+app.get("/css/styles.css", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "css", "styles.css"));
+});
+
+app.get("/js/markup.js", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "js", "markup.js"));
+});
+
+app.get("/js/share-markup.js", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "js", "share-markup.js"));
+});
+
+app.get("/api/public/markup-shares/:token", async (req, res) => {
+  try {
+    const share = await db.getMarkupShareByTokenHash(hashMarkupShareToken(req.params.token));
+    if (!share) return res.status(404).json({ error: "Markup request not found" });
+    if (share.status !== "open") return res.status(410).json({ error: "This markup request is closed", status: share.status });
+
+    const seenShare = await db.markMarkupShareSeen(share.id);
+    const artifact = await db.getMarkupArtifact(share.artifact_id);
+    if (!artifact) return res.status(404).json({ error: "Markup request not found" });
+    res.json(publicMarkupSharePayload(seenShare || share, artifact));
+  } catch (err) {
+    console.error("[public] Get markup share error:", err);
+    res.status(500).json({ error: "Failed to load markup request" });
+  }
+});
+
+app.patch("/api/public/markup-shares/:token", async (req, res) => {
+  try {
+    const share = await db.getMarkupShareByTokenHash(hashMarkupShareToken(req.params.token));
+    if (!share) return res.status(404).json({ error: "Markup request not found" });
+    if (share.status !== "open") return res.status(410).json({ error: "This markup request is closed", status: share.status });
+
+    const artifact = normalizeMarkupArtifact(await db.getMarkupArtifact(share.artifact_id));
+    if (!artifact) return res.status(404).json({ error: "Markup request not found" });
+
+    const reviewerName = typeof req.body.reviewerName === "string" ? req.body.reviewerName.trim().slice(0, 120) : null;
+    const reviewerEmail = typeof req.body.reviewerEmail === "string" ? req.body.reviewerEmail.trim().slice(0, 180) : null;
+    const updatedArtifact = normalizeMarkupArtifact(await db.updateMarkupArtifact(artifact.id, {
+      annotations: Array.isArray(req.body.annotations) ? req.body.annotations : artifact.annotations,
+      page_meta: req.body.page_meta || req.body.pageMeta || artifact.page_meta,
+      thumbnail_data_url: artifact.thumbnail_data_url || "",
+    }));
+    const updatedShare = await db.markMarkupShareSaved(share.id, reviewerName, reviewerEmail);
+
+    if (artifact.pin_id) {
+      await db.updatePinData(artifact.pin_id, markupPinData(updatedArtifact));
+    }
+    if (artifact.investigation_id) {
+      broadcastToInvestigation("pin-updated", artifact.investigation_id, {
+        pinId: artifact.pin_id,
+        markupUpdated: true,
+      });
+    }
+
+    res.json(publicMarkupSharePayload(updatedShare, updatedArtifact));
+  } catch (err) {
+    console.error("[public] Save markup share error:", err);
+    res.status(500).json({ error: "Failed to save markup feedback" });
+  }
 });
 
 // ── Auth Routes ──
@@ -794,6 +931,54 @@ app.post("/api/markup-artifacts", async (req, res) => {
   } catch (err) {
     console.error("[api] Create standalone markup artifact error:", err);
     res.status(500).json({ error: "Failed to create markup artifact" });
+  }
+});
+
+app.post("/api/markup-artifacts/:artifactId/share", async (req, res) => {
+  try {
+    const artifact = await canAccessMarkupArtifact(req.params.artifactId, req.session.userId);
+    if (!artifact) return res.status(404).json({ error: "Markup artifact not found" });
+    if (Number(artifact.created_by) !== Number(req.session.userId)) {
+      return res.status(403).json({ error: "Only the markup owner can share it" });
+    }
+
+    let share = await db.getOpenMarkupShareForArtifact(artifact.id, req.session.userId);
+    if (share) {
+      const existingToken = makeMarkupShareToken(share.id);
+      if (hashMarkupShareToken(existingToken) === share.token_hash) {
+        const shareUrl = markupShareUrl(req, existingToken);
+        return res.json({ share: normalizeMarkupShare(share), shareUrl, message: markupShareMessage(shareUrl) });
+      }
+    }
+
+    const shareId = "share_" + crypto.randomBytes(18).toString("base64url");
+    const token = makeMarkupShareToken(shareId);
+    share = await db.createMarkupShareRequest({
+      id: shareId,
+      artifact_id: artifact.id,
+      owner_id: req.session.userId,
+      token_hash: hashMarkupShareToken(token),
+    });
+    const shareUrl = markupShareUrl(req, token);
+    res.json({ share: normalizeMarkupShare(share), shareUrl, message: markupShareMessage(shareUrl) });
+  } catch (err) {
+    console.error("[api] Create markup share error:", err);
+    res.status(500).json({ error: "Failed to create markup share link" });
+  }
+});
+
+app.patch("/api/markup-shares/:shareId", async (req, res) => {
+  try {
+    const status = req.body.status;
+    if (!["open", "closed"].includes(status)) {
+      return res.status(400).json({ error: "Status must be open or closed" });
+    }
+    const updated = await db.updateMarkupShareStatus(req.params.shareId, req.session.userId, status);
+    if (!updated) return res.status(404).json({ error: "Markup share not found" });
+    res.json({ share: normalizeMarkupShare(updated) });
+  } catch (err) {
+    console.error("[api] Update markup share error:", err);
+    res.status(500).json({ error: "Failed to update markup share" });
   }
 });
 

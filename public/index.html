@@ -175,6 +175,10 @@
             <div style="font-size:12px;font-weight:700;color:var(--dark);">&#128196; HTML Report</div>
             <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">Full formatted report with styles and images</div>
           </div>
+          <div style="padding:10px 16px;cursor:pointer;transition:background 0.1s;border-top:1px solid var(--border-light);" onmouseover="this.style.background='var(--blue-light)'" onmouseout="this.style.background=''" onclick="exportInvPDF();closeExportDropdown();">
+            <div style="font-size:12px;font-weight:700;color:var(--dark);">&#128462; PDF Report</div>
+            <div style="font-size:11px;color:var(--text-secondary);margin-top:2px;">Download a shareable PDF version</div>
+          </div>
           <div style="padding:10px 16px;border-top:1px solid var(--border-light);">
             <div style="font-size:12px;font-weight:700;color:var(--dark);margin-bottom:8px;">&#129302; AI-Readable (.md)</div>
             <div style="font-size:11px;color:var(--text-secondary);margin-bottom:8px;">Minimal tokens, maximum information</div>
@@ -213,6 +217,10 @@
           <button class="btn-sm btn-light" onclick="attachSelectedMarkupInvestigation()">Attach</button>
           <button class="btn-sm btn-light" onclick="createInvestigationFromCurrentMarkup()">New Investigation</button>
         </div>
+        <button class="btn-sm btn-light" id="markupUndoBtn" onclick="undoCurrentMarkup()" title="Undo (Ctrl+Z)" disabled>&#8630;</button>
+        <button class="btn-sm btn-light" id="markupRedoBtn" onclick="redoCurrentMarkup()" title="Redo (Ctrl+Y or Ctrl+Shift+Z)" disabled>&#8631;</button>
+        <button class="btn-sm btn-light" id="markupShareBtn" onclick="shareCurrentMarkup()">Copy Share Link</button>
+        <button class="btn-sm btn-light" id="markupShareStatusBtn" onclick="toggleCurrentMarkupShareStatus()" style="display:none;">Close Request</button>
         <button class="btn-sm btn-light" onclick="exportCurrentMarkup()">Export HTML</button>
         <button class="btn-sm btn-primary" id="markupSaveBtn" onclick="saveCurrentMarkup()">Save</button>
         <button class="modal-close" onclick="closeMarkupWorkspace()">&times;</button>
@@ -221,13 +229,21 @@
     <div class="markup-body">
       <aside class="markup-tools">
         <button class="markup-tool active" data-tool="select" onclick="setMarkupTool('select')" title="Select or move">Select</button>
-        <button class="markup-tool" data-tool="marker" onclick="setMarkupTool('marker')" title="Marker box">Marker</button>
+        <button class="markup-tool" data-tool="shape" onclick="setMarkupTool('shape')" title="Draw a shape">Shape</button>
+        <label class="markup-field markup-shape-field">Type
+          <select id="markupShape" onchange="updateMarkupShapeTool()" title="Shape type">
+            <option value="rect">Rectangle</option>
+            <option value="round">Rounded</option>
+            <option value="ellipse">Oval</option>
+            <option value="diamond">Diamond</option>
+            <option value="triangle">Triangle</option>
+          </select>
+        </label>
         <button class="markup-tool" data-tool="highlight" onclick="setMarkupTool('highlight')" title="Highlight">Highlight</button>
         <button class="markup-tool" data-tool="arrow" onclick="setMarkupTool('arrow')" title="Arrow">Arrow</button>
         <button class="markup-tool" data-tool="text" onclick="setMarkupTool('text')" title="Text box">Text</button>
-        <button class="markup-tool" data-tool="pen" onclick="setMarkupTool('pen')" title="Freehand pen">Pen</button>
         <label class="markup-field">Color <input type="color" id="markupColor" value="#DC2626" onchange="updateSelectedMarkupStyle()"></label>
-        <label class="markup-field">Stroke <input type="range" id="markupStroke" min="1" max="10" value="3" onchange="updateSelectedMarkupStyle()"></label>
+        <label class="markup-field">Stroke <input type="range" id="markupStroke" min="1" max="6" value="2" onchange="updateSelectedMarkupStyle()"></label>
         <button class="btn-sm btn-light" onclick="deleteSelectedMarkup()">Delete</button>
       </aside>
       <main class="markup-stage-wrap" id="markupStageWrap">
@@ -238,9 +254,9 @@
         <div class="markup-inspector-list" id="markupAnnotationList"></div>
         <div class="markup-editor" id="markupEditor" style="display:none;">
           <label class="field-label">Visible text</label>
-          <input type="text" id="markupTextInput" class="text-input" oninput="updateSelectedMarkupText()" placeholder="Optional label">
+          <input type="text" id="markupTextInput" class="text-input" onfocus="prepareSelectedMarkupEdit('text')" onblur="finishMarkupHistoryEdit()" oninput="updateSelectedMarkupText()" placeholder="Optional label">
           <label class="field-label">Summary comment</label>
-          <textarea id="markupSummaryInput" class="text-area" oninput="updateSelectedMarkupSummary()" placeholder="Explain what should change or why this matters..."></textarea>
+          <textarea id="markupSummaryInput" class="text-area" onfocus="prepareSelectedMarkupEdit('summary')" onblur="finishMarkupHistoryEdit()" oninput="updateSelectedMarkupSummary()" placeholder="Explain what should change or why this matters..."></textarea>
         </div>
       </aside>
     </div>

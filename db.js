@@ -105,6 +105,24 @@ async function initDB() {
       CREATE INDEX IF NOT EXISTS idx_markup_artifacts_inv ON markup_artifacts(investigation_id);
       CREATE INDEX IF NOT EXISTS idx_markup_artifacts_pin ON markup_artifacts(pin_id);
 
+      CREATE TABLE IF NOT EXISTS markup_share_requests (
+        id                     TEXT PRIMARY KEY,
+        artifact_id            TEXT NOT NULL REFERENCES markup_artifacts(id) ON DELETE CASCADE,
+        owner_id               INTEGER NOT NULL REFERENCES users(id),
+        token_hash             TEXT NOT NULL UNIQUE,
+        status                 TEXT NOT NULL DEFAULT 'open',
+        reviewer_name          TEXT NOT NULL DEFAULT '',
+        reviewer_email         TEXT NOT NULL DEFAULT '',
+        last_reviewer_seen_at  TIMESTAMPTZ,
+        last_reviewer_saved_at TIMESTAMPTZ,
+        created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        closed_at              TIMESTAMPTZ
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_markup_share_requests_artifact ON markup_share_requests(artifact_id);
+      CREATE INDEX IF NOT EXISTS idx_markup_share_requests_owner ON markup_share_requests(owner_id);
+      CREATE INDEX IF NOT EXISTS idx_markup_share_requests_status ON markup_share_requests(status);
+
       CREATE TABLE IF NOT EXISTS dismissed_anomalies (
         id           SERIAL PRIMARY KEY,
         user_id      INTEGER NOT NULL REFERENCES users(id),
@@ -144,6 +162,11 @@ async function initDB() {
       ALTER TABLE pins ADD COLUMN IF NOT EXISTS in_summary BOOLEAN NOT NULL DEFAULT FALSE;
       ALTER TABLE markup_artifacts ALTER COLUMN investigation_id DROP NOT NULL;
       ALTER TABLE markup_artifacts ALTER COLUMN pin_id DROP NOT NULL;
+      ALTER TABLE markup_share_requests ADD COLUMN IF NOT EXISTS reviewer_name TEXT NOT NULL DEFAULT '';
+      ALTER TABLE markup_share_requests ADD COLUMN IF NOT EXISTS reviewer_email TEXT NOT NULL DEFAULT '';
+      ALTER TABLE markup_share_requests ADD COLUMN IF NOT EXISTS last_reviewer_seen_at TIMESTAMPTZ;
+      ALTER TABLE markup_share_requests ADD COLUMN IF NOT EXISTS last_reviewer_saved_at TIMESTAMPTZ;
+      ALTER TABLE markup_share_requests ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ;
     `).catch(() => {}); // safe to ignore if column already exists
     console.log("[db] Migrations applied");
   } finally {
@@ -462,17 +485,51 @@ async function createMarkupArtifact(artifact) {
 }
 
 async function getMarkupArtifact(id) {
-  return queryOne("SELECT * FROM markup_artifacts WHERE id = $1", [id]);
+  return queryOne(`
+    SELECT ma.*,
+      ms.id AS share_id,
+      ms.status AS share_status,
+      ms.reviewer_name AS share_reviewer_name,
+      ms.reviewer_email AS share_reviewer_email,
+      ms.last_reviewer_seen_at AS share_last_reviewer_seen_at,
+      ms.last_reviewer_saved_at AS share_last_reviewer_saved_at,
+      ms.created_at AS share_created_at,
+      ms.closed_at AS share_closed_at
+    FROM markup_artifacts ma
+    LEFT JOIN LATERAL (
+      SELECT *
+      FROM markup_share_requests
+      WHERE artifact_id = ma.id
+      ORDER BY (status = 'open') DESC, created_at DESC
+      LIMIT 1
+    ) ms ON TRUE
+    WHERE ma.id = $1
+  `, [id]);
 }
 
 async function getStandaloneMarkupArtifactsForUser(userId) {
   return queryAll(`
-    SELECT *
-    FROM markup_artifacts
-    WHERE created_by = $1
-      AND investigation_id IS NULL
-      AND pin_id IS NULL
-    ORDER BY created_at DESC
+    SELECT ma.*,
+      ms.id AS share_id,
+      ms.status AS share_status,
+      ms.reviewer_name AS share_reviewer_name,
+      ms.reviewer_email AS share_reviewer_email,
+      ms.last_reviewer_seen_at AS share_last_reviewer_seen_at,
+      ms.last_reviewer_saved_at AS share_last_reviewer_saved_at,
+      ms.created_at AS share_created_at,
+      ms.closed_at AS share_closed_at
+    FROM markup_artifacts ma
+    LEFT JOIN LATERAL (
+      SELECT *
+      FROM markup_share_requests
+      WHERE artifact_id = ma.id
+      ORDER BY (status = 'open') DESC, created_at DESC
+      LIMIT 1
+    ) ms ON TRUE
+    WHERE ma.created_by = $1
+      AND ma.investigation_id IS NULL
+      AND ma.pin_id IS NULL
+    ORDER BY ma.created_at DESC
   `, [userId]);
 }
 
@@ -509,6 +566,65 @@ async function updateMarkupArtifact(id, fields) {
 
 async function deleteMarkupArtifact(id) {
   return query("DELETE FROM markup_artifacts WHERE id = $1", [id]);
+}
+
+// ── Markup Share Requests ──
+
+async function createMarkupShareRequest(share) {
+  return queryOne(`
+    INSERT INTO markup_share_requests (id, artifact_id, owner_id, token_hash, status)
+    VALUES ($1, $2, $3, $4, 'open')
+    RETURNING *
+  `, [share.id, share.artifact_id, share.owner_id, share.token_hash]);
+}
+
+async function getOpenMarkupShareForArtifact(artifactId, ownerId) {
+  return queryOne(`
+    SELECT *
+    FROM markup_share_requests
+    WHERE artifact_id = $1 AND owner_id = $2 AND status = 'open'
+    ORDER BY created_at DESC
+    LIMIT 1
+  `, [artifactId, ownerId]);
+}
+
+async function getMarkupShareById(id) {
+  return queryOne("SELECT * FROM markup_share_requests WHERE id = $1", [id]);
+}
+
+async function getMarkupShareByTokenHash(tokenHash) {
+  return queryOne("SELECT * FROM markup_share_requests WHERE token_hash = $1", [tokenHash]);
+}
+
+async function updateMarkupShareStatus(id, ownerId, status) {
+  return queryOne(`
+    UPDATE markup_share_requests
+    SET status = $1,
+        closed_at = CASE WHEN $1 = 'closed' THEN NOW() ELSE NULL END
+    WHERE id = $2 AND owner_id = $3
+    RETURNING *
+  `, [status, id, ownerId]);
+}
+
+async function markMarkupShareSeen(id) {
+  return queryOne(`
+    UPDATE markup_share_requests
+    SET last_reviewer_seen_at = NOW()
+    WHERE id = $1
+    RETURNING *
+  `, [id]);
+}
+
+async function markMarkupShareSaved(id, reviewerName, reviewerEmail) {
+  return queryOne(`
+    UPDATE markup_share_requests
+    SET reviewer_name = COALESCE($2, reviewer_name),
+        reviewer_email = COALESCE($3, reviewer_email),
+        last_reviewer_seen_at = COALESCE(last_reviewer_seen_at, NOW()),
+        last_reviewer_saved_at = NOW()
+    WHERE id = $1
+    RETURNING *
+  `, [id, reviewerName, reviewerEmail]);
 }
 
 // ── Pin Images ──
@@ -588,6 +704,7 @@ module.exports = {
   getMembers, addMember, removeMember,
   getPinsForInvestigation, createPin, updatePin, updatePinData, deletePin, getPinInvestigationId, reorderPins, movePin, copyPin,
   createMarkupArtifact, getMarkupArtifact, getStandaloneMarkupArtifactsForUser, getMarkupArtifactByPin, attachMarkupArtifact, updateMarkupArtifact, deleteMarkupArtifact,
+  createMarkupShareRequest, getOpenMarkupShareForArtifact, getMarkupShareById, getMarkupShareByTokenHash, updateMarkupShareStatus, markMarkupShareSeen, markMarkupShareSaved,
   getImagesForPin, addImage, deleteImage,
   getDismissedAnomalies, dismissAnomaly, restoreAnomaly,
   getBonusConfig, saveBonusConfig,

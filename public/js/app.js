@@ -68,8 +68,20 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Keyboard shortcuts
   document.addEventListener('keydown', function(e) {
+    var markupOverlay = document.getElementById('markupOverlay');
+    var markupActive = markupOverlay && markupOverlay.classList.contains('active');
+    var key = (e.key || '').toLowerCase();
+    if (markupActive && (e.ctrlKey || e.metaKey) && (key === 'z' || key === 'y')) {
+      e.preventDefault();
+      if (key === 'y' || e.shiftKey) {
+        redoCurrentMarkup();
+      } else {
+        undoCurrentMarkup();
+      }
+      return;
+    }
     if (e.key === 'Escape') {
-      if (document.getElementById('markupOverlay') && document.getElementById('markupOverlay').classList.contains('active')) {
+      if (markupActive) {
         closeMarkupWorkspace();
       } else if (document.getElementById('reportOverlay').classList.contains('active')) {
         closeReport();
