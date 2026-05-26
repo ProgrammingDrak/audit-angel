@@ -286,8 +286,8 @@ function onMarkupPointerDown(evt) {
     page: page,
     x: p.x,
     y: p.y,
-    w: _markup.tool === 'text' ? 0.14 : 0.01,
-    h: _markup.tool === 'text' ? 0.045 : 0.01,
+    w: _markup.tool === 'text' ? 0.17 : 0.01,
+    h: _markup.tool === 'text' ? 0.055 : 0.01,
     x2: p.x,
     y2: p.y,
     points: _markup.tool === 'pen' ? [p] : [],
@@ -438,13 +438,58 @@ function createMarkupSvgNode(ann) {
   node.setAttribute('stroke', color);
   node.setAttribute('stroke-width', stroke);
   if (ann.type !== 'text') node.setAttribute('vector-effect', 'non-scaling-stroke');
-  group.setAttribute('class', 'markup-ann' + (ann.id === _markup.selectedId ? ' selected' : ''));
+  group.setAttribute('class', 'markup-ann markup-ann-' + (ann.type || 'annotation') + (ann.id === _markup.selectedId ? ' selected' : ''));
   group.setAttribute('data-ann-id', ann.id);
   node.style.color = color;
   group.style.color = color;
   group.appendChild(node);
   appendMarkupVisibleTextLabel(group, ann, color);
+  appendMarkupSelectionAffordance(group, ann);
   return group;
+}
+
+function appendMarkupSelectionAffordance(group, ann) {
+  if (ann.id !== _markup.selectedId) return;
+  var ns = 'http://www.w3.org/2000/svg';
+  var bounds = getMarkupAnnotationBounds(ann);
+  var pad = 0.65;
+  var left = Math.max(0.25, bounds.left - pad);
+  var top = Math.max(0.25, bounds.top - pad);
+  var right = Math.min(99.75, bounds.right + pad);
+  var bottom = Math.min(99.75, bounds.bottom + pad);
+  var w = Math.max(1.4, right - left);
+  var h = Math.max(1.4, bottom - top);
+  var selection = document.createElementNS(ns, 'g');
+  selection.setAttribute('class', 'markup-selection-affordance');
+
+  var rect = document.createElementNS(ns, 'rect');
+  rect.setAttribute('x', left);
+  rect.setAttribute('y', top);
+  rect.setAttribute('width', w);
+  rect.setAttribute('height', h);
+  rect.setAttribute('rx', 0.45);
+  rect.setAttribute('fill', 'none');
+  rect.setAttribute('stroke', '#0075EB');
+  rect.setAttribute('stroke-width', 1.25);
+  rect.setAttribute('stroke-dasharray', '4 3');
+  rect.setAttribute('vector-effect', 'non-scaling-stroke');
+  selection.appendChild(rect);
+
+  [[left, top], [right, top], [right, bottom], [left, bottom]].forEach(function(point) {
+    var handle = document.createElementNS(ns, 'rect');
+    handle.setAttribute('x', point[0] - 0.55);
+    handle.setAttribute('y', point[1] - 0.55);
+    handle.setAttribute('width', 1.1);
+    handle.setAttribute('height', 1.1);
+    handle.setAttribute('rx', 0.18);
+    handle.setAttribute('fill', '#fff');
+    handle.setAttribute('stroke', '#0075EB');
+    handle.setAttribute('stroke-width', 1.1);
+    handle.setAttribute('vector-effect', 'non-scaling-stroke');
+    selection.appendChild(handle);
+  });
+
+  group.appendChild(selection);
 }
 
 function appendMarkupVisibleTextLabel(group, ann, color) {
